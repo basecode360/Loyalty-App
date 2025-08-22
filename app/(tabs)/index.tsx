@@ -20,7 +20,7 @@ import * as api from '../../services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [recentActivity, setRecentActivity] = useState<PointsTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,6 +71,26 @@ export default function HomeScreen() {
     }
   };
 
+  // Get user's display name from userProfile
+  const getUserDisplayName = () => {
+    if (userProfile?.first_name && userProfile?.last_name) {
+      return `${userProfile.first_name} ${userProfile.last_name}`;
+    } else if (userProfile?.first_name) {
+      return userProfile.first_name;
+    } else if (userProfile?.full_name) {
+      return userProfile.full_name;
+    } else if (user?.email) {
+      // Fallback to email name part
+      return user.email.split('@')[0];
+    }
+    return 'User';
+  };
+
+  // Get user's points balance
+  const getPointsBalance = () => {
+    return userProfile?.loyalty_points || 0;
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -91,7 +111,16 @@ export default function HomeScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.greeting}>Welcome back!</Text>
-          <Text style={styles.userName}>{user?.name || 'User'}</Text>
+          <Text style={styles.userName}>{getUserDisplayName()}</Text>
+          <Text style={styles.memberInfo}>
+            Member since {userProfile?.created_at ? 
+              new Date(userProfile.created_at).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long' 
+              }) : 
+              'Recently'
+            }
+          </Text>
         </View>
 
         {/* Points Balance Card */}
@@ -100,7 +129,7 @@ export default function HomeScreen() {
             <View style={styles.balanceInfo}>
               <Text style={styles.balanceLabel}>Your Points Balance</Text>
               <Text style={styles.balanceAmount}>
-                {user?.pointsBalance?.toLocaleString() || '0'}
+                {getPointsBalance().toLocaleString()}
               </Text>
             </View>
             <View style={styles.balanceIcon}>
@@ -179,8 +208,38 @@ export default function HomeScreen() {
             ) : (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>No recent activity</Text>
+                <Text style={styles.emptySubtext}>
+                  Start scanning receipts to earn points!
+                </Text>
               </View>
             )}
+          </Card>
+        </View>
+
+        {/* User Stats */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Your Stats</Text>
+          <Card>
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{getPointsBalance()}</Text>
+                <Text style={styles.statLabel}>Total Points</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>
+                  {userProfile?.status === 'active' ? 'Active' : 'Inactive'}
+                </Text>
+                <Text style={styles.statLabel}>Account Status</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>
+                  {userProfile?.country || 'Not Set'}
+                </Text>
+                <Text style={styles.statLabel}>Location</Text>
+              </View>
+            </View>
           </Card>
         </View>
       </ScrollView>
@@ -209,11 +268,17 @@ const styles = StyleSheet.create({
   greeting: {
     ...Typography.body,
     color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
   },
   userName: {
     ...Typography.title2,
     color: Colors.text,
     fontWeight: '600',
+    marginBottom: Spacing.xs,
+  },
+  memberInfo: {
+    ...Typography.caption,
+    color: Colors.textLight,
   },
   balanceCard: {
     marginHorizontal: Spacing.lg,
@@ -238,6 +303,12 @@ const styles = StyleSheet.create({
     ...Typography.title1,
     color: Colors.background,
     fontWeight: '700',
+    marginBottom: Spacing.xs,
+  },
+  balanceSubtext: {
+    ...Typography.caption,
+    color: Colors.background,
+    opacity: 0.9,
   },
   balanceIcon: {
     opacity: 0.8,
@@ -309,5 +380,35 @@ const styles = StyleSheet.create({
   emptyText: {
     ...Typography.body,
     color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  emptySubtext: {
+    ...Typography.caption,
+    color: Colors.textLight,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    ...Typography.title3,
+    color: Colors.text,
+    fontWeight: '600',
+    marginBottom: Spacing.xs,
+  },
+  statLabel: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: Colors.border,
+    marginHorizontal: Spacing.md,
   },
 });

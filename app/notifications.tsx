@@ -3,191 +3,307 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  RefreshControl,
+  ScrollView,
   TouchableOpacity,
+  Switch,
+  Alert,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, BellRing, Tag, CreditCard } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Bell,
+  Mail,
+  Smartphone,
+  Gift,
+  TrendingUp,
+  Shield,
+  Clock,
+  Volume2
+} from 'lucide-react-native';
+import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
-import { ListItem } from '../components/ui/ListItem';
-import { Badge } from '../components/ui/Badge';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { Colors, Typography, Spacing } from '../constants/Colors';
-import { Notification } from '../types/api';
-import * as api from '../services/api';
+
+interface NotificationSettings {
+  pushNotifications: boolean;
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  marketingEmails: boolean;
+  pointsUpdates: boolean;
+  receiptProcessing: boolean;
+  promotions: boolean;
+  securityAlerts: boolean;
+  weeklyDigest: boolean;
+  soundEnabled: boolean;
+  vibrationEnabled: boolean;
+}
 
 export default function NotificationsScreen() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const router = useRouter();
+  const { userProfile, updateProfile } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [settings, setSettings] = useState<NotificationSettings>({
+    pushNotifications: true,
+    emailNotifications: true,
+    smsNotifications: false,
+    marketingEmails: false,
+    pointsUpdates: true,
+    receiptProcessing: true,
+    promotions: true,
+    securityAlerts: true,
+    weeklyDigest: false,
+    soundEnabled: true,
+    vibrationEnabled: true,
+  });
 
   useEffect(() => {
-    loadNotifications();
-  }, []);
+    // Load existing notification preferences
+    if (userProfile) {
+      setSettings(prev => ({
+        ...prev,
+        marketingEmails: userProfile.agree_to_marketing || false,
+      }));
+    }
+  }, [userProfile]);
 
-  const loadNotifications = async () => {
+  const updateSetting = async (key: keyof NotificationSettings, value: boolean) => {
     try {
-      const data = await api.getNotifications();
-      setNotifications(data);
+      setSettings(prev => ({ ...prev, [key]: value }));
+
+      // If marketing emails changed, update user profile
+      if (key === 'marketingEmails') {
+        setIsLoading(true);
+        await updateProfile({ agreeToMarketing: value });
+        setIsLoading(false);
+      }
+
+      // TODO: Save other notification preferences to backend
+      console.log('Notification setting updated:', key, value);
+
     } catch (error) {
-      console.error('Error loading notifications:', error);
-    } finally {
-      setIsLoading(false);
+      console.error('Error updating notification setting:', error);
+      // Revert the change
+      setSettings(prev => ({ ...prev, [key]: !value }));
+      Alert.alert('Error', 'Failed to update notification setting. Please try again.');
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadNotifications();
-    setRefreshing(false);
-  };
-
-  const markAsRead = (notificationId: string) => {
-    setNotifications(prev =>
-      prev.map(notification =>
-        notification.id === notificationId
-          ? { ...notification, isRead: true }
-          : notification
-      )
-    );
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
-    if (diffInHours < 1) {
-      return 'Just now';
-    } else if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}h ago`;
-    } else if (diffInHours < 168) { // 7 days
-      return `${Math.floor(diffInHours / 24)}d ago`;
-    } else {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      });
-    }
-  };
-
-  const getNotificationIcon = (type: Notification['type']) => {
-    switch (type) {
-      case 'transactional':
-        return <CreditCard size={20} color={Colors.primary} />;
-      case 'marketing':
-        return <Tag size={20} color={Colors.accent} />;
-      default:
-        return <Bell size={20} color={Colors.textSecondary} />;
-    }
-  };
-
-  const renderNotificationItem = ({ item }: { item: Notification }) => (
-    <TouchableOpacity
-      onPress={() => markAsRead(item.id)}
-      style={[
-        styles.notificationItem,
-        !item.isRead && styles.unreadNotification,
-      ]}
-    >
-      <View style={styles.notificationContent}>
-        <View style={styles.notificationHeader}>
-          <View style={styles.headerLeft}>
-            {getNotificationIcon(item.type)}
-            <View style={styles.titleContainer}>
-              <Text
-                style={[
-                  styles.notificationTitle,
-                  !item.isRead && styles.unreadTitle,
-                ]}
-              >
-                {item.title}
-              </Text>
-              <Text style={styles.notificationTime}>
-                {formatDate(item.createdAt)}
-              </Text>
-            </View>
-          </View>
-          {!item.isRead && <View style={styles.unreadDot} />}
+  const renderSettingItem = (
+    icon: React.ReactNode,
+    title: string,
+    description: string,
+    settingKey: keyof NotificationSettings,
+    disabled = false
+  ) => (
+    <View style={[styles.settingItem, disabled && styles.settingItemDisabled]}>
+      <View style={styles.settingInfo}>
+        <View style={styles.settingIcon}>
+          {icon}
         </View>
-        <Text style={styles.notificationMessage}>{item.message}</Text>
-        <Badge
-          text={item.type === 'transactional' ? 'Transaction' : 'Promotion'}
-          variant={item.type === 'transactional' ? 'primary' : 'success'}
-          style={styles.typeBadge}
-        />
+        <View style={styles.settingDetails}>
+          <Text style={[styles.settingTitle, disabled && styles.settingTitleDisabled]}>
+            {title}
+          </Text>
+          <Text style={[styles.settingDescription, disabled && styles.settingDescriptionDisabled]}>
+            {description}
+          </Text>
+        </View>
       </View>
-    </TouchableOpacity>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Bell size={64} color={Colors.textLight} />
-      <Text style={styles.emptyTitle}>No Notifications</Text>
-      <Text style={styles.emptyDescription}>
-        You're all caught up! New notifications will appear here.
-      </Text>
+      <Switch
+        value={settings[settingKey]}
+        onValueChange={(value) => updateSetting(settingKey, value)}
+        trackColor={{ false: Colors.border, true: `${Colors.primary}50` }}
+        thumbColor={settings[settingKey] ? Colors.primary : Colors.textLight}
+        disabled={disabled || isLoading}
+      />
     </View>
   );
 
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <LoadingSpinner size={32} />
-        </View>
-      </SafeAreaView>
+  const handleTestNotification = () => {
+    Alert.alert(
+      '🔔 Test Notification',
+      'This is how notifications will appear on your device.',
+      [{ text: 'OK' }]
     );
-  }
+  };
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const handleManagePermissions = () => {
+    Alert.alert(
+      'Notification Permissions',
+      'To change system notification permissions, go to your device Settings > Apps > LoyaltyApp > Notifications.',
+      [
+        {
+          text: 'Open Settings',
+          onPress: () => {
+            // TODO: Open device settings
+            console.log('Opening device settings...');
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      {notifications.length > 0 && (
-        <Card style={styles.headerCard}>
-          <View style={styles.headerContent}>
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <BellRing size={20} color={Colors.primary} />
-                <Text style={styles.statValue}>{unreadCount}</Text>
-                <Text style={styles.statLabel}>Unread</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Bell size={20} color={Colors.textSecondary} />
-                <Text style={styles.statValue}>{notifications.length}</Text>
-                <Text style={styles.statLabel}>Total</Text>
-              </View>
-            </View>
-            {unreadCount > 0 && (
-              <TouchableOpacity
-                style={styles.markAllButton}
-                onPress={() => {
-                  setNotifications(prev =>
-                    prev.map(notification => ({ ...notification, isRead: true }))
-                  );
-                }}
-              >
-                <Text style={styles.markAllText}>Mark All Read</Text>
-              </TouchableOpacity>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <ArrowLeft size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Notifications</Text>
+        <TouchableOpacity onPress={handleTestNotification}>
+          <Bell size={24} color={Colors.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Quick Actions */}
+        <Card style={styles.actionsCard}>
+          <TouchableOpacity style={styles.actionButton} onPress={handleTestNotification}>
+            <Bell size={20} color={Colors.primary} />
+            <Text style={styles.actionButtonText}>Send Test Notification</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={handleManagePermissions}>
+            <Shield size={20} color={Colors.primary} />
+            <Text style={styles.actionButtonText}>Manage Permissions</Text>
+          </TouchableOpacity>
+        </Card>
+
+        {/* Delivery Methods */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Delivery Methods</Text>
+          <Card>
+            {renderSettingItem(
+              <Smartphone size={20} color={Colors.primary} />,
+              'Push Notifications',
+              'Receive notifications on this device',
+              'pushNotifications'
             )}
+            {renderSettingItem(
+              <Mail size={20} color={Colors.primary} />,
+              'Email Notifications',
+              'Receive notifications via email',
+              'emailNotifications'
+            )}
+            {renderSettingItem(
+              <Smartphone size={20} color={Colors.primary} />,
+              'SMS Notifications',
+              'Receive notifications via text message',
+              'smsNotifications',
+              true // Disabled for now
+            )}
+          </Card>
+        </View>
+
+        {/* Notification Types */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>What to Notify</Text>
+          <Card>
+            {renderSettingItem(
+              <TrendingUp size={20} color={Colors.accent} />,
+              'Points Updates',
+              'When you earn or redeem points',
+              'pointsUpdates'
+            )}
+            {renderSettingItem(
+              <Clock size={20} color={Colors.primary} />,
+              'Receipt Processing',
+              'Status updates for submitted receipts',
+              'receiptProcessing'
+            )}
+            {renderSettingItem(
+              <Gift size={20} color={Colors.primary} />,
+              'Promotions & Offers',
+              'Special deals and bonus point opportunities',
+              'promotions'
+            )}
+            {renderSettingItem(
+              <Shield size={20} color={Colors.error} />,
+              'Security Alerts',
+              'Login attempts and account security',
+              'securityAlerts'
+            )}
+            {renderSettingItem(
+              <Mail size={20} color={Colors.primary} />,
+              'Marketing Emails',
+              'Promotional content and product updates',
+              'marketingEmails'
+            )}
+            {renderSettingItem(
+              <Bell size={20} color={Colors.primary} />,
+              'Weekly Digest',
+              'Summary of your weekly activity',
+              'weeklyDigest'
+            )}
+          </Card>
+        </View>
+
+        {/* Sound & Vibration */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Sound & Vibration</Text>
+          <Card>
+            {renderSettingItem(
+              <Volume2 size={20} color={Colors.primary} />,
+              'Sound',
+              'Play sound for notifications',
+              'soundEnabled'
+            )}
+            {renderSettingItem(
+              <Smartphone size={20} color={Colors.primary} />,
+              'Vibration',
+              'Vibrate for notifications',
+              'vibrationEnabled'
+            )}
+          </Card>
+        </View>
+
+        {/* Privacy Notice */}
+        <Card style={styles.privacyCard}>
+          <View style={styles.privacyHeader}>
+            <Shield size={20} color={Colors.accent} />
+            <Text style={styles.privacyTitle}>Privacy Notice</Text>
+          </View>
+          <Text style={styles.privacyText}>
+            We respect your privacy. You can change these settings anytime.
+            We'll never share your personal information with third parties without your consent.
+          </Text>
+        </Card>
+
+        {/* Summary */}
+        <Card style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Notification Summary</Text>
+          <View style={styles.summaryStats}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Active Methods</Text>
+              <Text style={styles.summaryValue}>
+                {[settings.pushNotifications, settings.emailNotifications, settings.smsNotifications]
+                  .filter(Boolean).length} / 3
+              </Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Notification Types</Text>
+              <Text style={styles.summaryValue}>
+                {[
+                  settings.pointsUpdates,
+                  settings.receiptProcessing,
+                  settings.promotions,
+                  settings.securityAlerts,
+                  settings.marketingEmails,
+                  settings.weeklyDigest
+                ].filter(Boolean).length} / 6
+              </Text>
+            </View>
           </View>
         </Card>
-      )}
 
-      <FlatList
-        data={notifications}
-        renderItem={renderNotificationItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={renderEmptyState}
-      />
+        <View style={styles.bottomPadding} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -197,129 +313,154 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.backgroundSecondary,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerCard: {
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.lg,
-  },
-  headerContent: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statValue: {
-    ...Typography.bodyBold,
-    color: Colors.text,
-    marginHorizontal: Spacing.xs,
-    fontWeight: '600',
-  },
-  statLabel: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-  },
-  statDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: Colors.border,
-    marginHorizontal: Spacing.md,
-  },
-  markAllButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 8,
-  },
-  markAllText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  listContent: {
-    flexGrow: 1,
-    backgroundColor: Colors.background,
-    marginTop: Spacing.lg,
-  },
-  notificationItem: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     backgroundColor: Colors.background,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  unreadNotification: {
-    backgroundColor: `${Colors.primary}05`,
+  headerTitle: {
+    ...Typography.title3,
+    color: Colors.text,
+    fontWeight: '600',
   },
-  notificationContent: {
-    padding: Spacing.md,
-  },
-  notificationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  scrollView: {
     flex: 1,
   },
-  titleContainer: {
+  actionsCard: {
+    margin: Spacing.lg,
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${Colors.primary}15`,
+    paddingVertical: Spacing.md,
+    borderRadius: 8,
+  },
+  actionButtonText: {
+    ...Typography.bodyBold,
+    color: Colors.primary,
     marginLeft: Spacing.sm,
+  },
+  section: {
+    marginBottom: Spacing.lg,
+    marginHorizontal: Spacing.lg,
+  },
+  sectionTitle: {
+    ...Typography.bodyBold,
+    color: Colors.text,
+    fontWeight: '600',
+    marginBottom: Spacing.sm,
+    marginLeft: Spacing.xs,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  settingItemDisabled: {
+    opacity: 0.5,
+  },
+  settingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
-  notificationTitle: {
+  settingIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${Colors.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.md,
+  },
+  settingDetails: {
+    flex: 1,
+  },
+  settingTitle: {
     ...Typography.bodyBold,
     color: Colors.text,
     marginBottom: Spacing.xs,
   },
-  unreadTitle: {
-    fontWeight: '600',
-  },
-  notificationTime: {
-    ...Typography.small,
+  settingTitleDisabled: {
     color: Colors.textLight,
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.primary,
+  settingDescription: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    lineHeight: 18,
   },
-  notificationMessage: {
+  settingDescriptionDisabled: {
+    color: Colors.textLight,
+  },
+  privacyCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    backgroundColor: `${Colors.accent}10`,
+    borderWidth: 1,
+    borderColor: `${Colors.accent}30`,
+  },
+  privacyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  privacyTitle: {
+    ...Typography.bodyBold,
+    color: Colors.text,
+    marginLeft: Spacing.sm,
+  },
+  privacyText: {
     ...Typography.body,
     color: Colors.textSecondary,
     lineHeight: 22,
-    marginBottom: Spacing.sm,
   },
-  typeBadge: {
-    alignSelf: 'flex-start',
+  summaryCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
   },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-  },
-  emptyTitle: {
-    ...Typography.title3,
+  summaryTitle: {
+    ...Typography.bodyBold,
     color: Colors.text,
-    fontWeight: '600',
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
-  emptyDescription: {
-    ...Typography.body,
+  summaryStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    ...Typography.caption,
     color: Colors.textSecondary,
-    textAlign: 'center',
+    marginBottom: Spacing.xs,
+  },
+  summaryValue: {
+    ...Typography.title3,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  summaryDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: Colors.border,
+    marginHorizontal: Spacing.md,
+  },
+  bottomPadding: {
+    height: Spacing.xl,
   },
 });

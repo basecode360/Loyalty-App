@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
@@ -19,79 +20,136 @@ import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Color
 export default function SignUpScreen() {
   const router = useRouter();
   const { signUpWithEmail } = useAuth();
-  
+
   // Personal Information
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [gender, setGender] = useState('');
-  
+
   // Contact Information
   const [email, setEmail] = useState('');
-  const [alternatePhone, setAlternatePhone] = useState('');
-  
+
   // Address Information
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [country, setCountry] = useState('Pakistan');
-  
+
   // Password
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
   // Agreement
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [agreeToMarketing, setAgreeToMarketing] = useState(false);
-  
+
   const [isLoading, setIsLoading] = useState(false);
 
   const genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
-  const handleDateChange = (text: string) => {
-    // Auto-format date as DD/MM/YYYY
-    let formatted = text.replace(/\D/g, '');
-    if (formatted.length >= 2) {
-      formatted = formatted.substring(0, 2) + '/' + formatted.substring(2);
-    }
-    if (formatted.length >= 5) {
-      formatted = formatted.substring(0, 5) + '/' + formatted.substring(5, 9);
-    }
-    setDateOfBirth(formatted);
+  // Validation Functions
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   };
 
-  const handlePhoneChange = (text: string, setter: (value: string) => void) => {
-    // Allow only numbers and format
-    const cleaned = text.replace(/\D/g, '');
-    setter(cleaned);
+  const validateZipCode = (zip) => {
+    // Pakistan postal codes: exactly 4 digits
+    const pakistanZipRegex = /^\d{4}$/;
+    
+    if (country === 'Pakistan') {
+      return pakistanZipRegex.test(zip);
+    }
+    
+    // For other countries, keep flexible validation
+    const usZipRegex = /^\d{5}(-\d{4})?$/;
+    const ukPostcodeRegex = /^[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}$/i;
+    
+    if (country === 'United States') {
+      return usZipRegex.test(zip);
+    } else if (country === 'United Kingdom') {
+      return ukPostcodeRegex.test(zip);
+    }
+    
+    // General validation for other countries - at least 3 characters
+    return zip.length >= 3;
+  };
+
+  const validatePassword = (password) => {
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    const hasMinLength = password.length >= 8;
+    
+    return {
+      hasMinLength,
+      hasUpperCase,
+      hasLowerCase,
+      hasNumber,
+      isValid: hasMinLength && hasUpperCase && hasLowerCase && hasNumber
+    };
+  };
+
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+      const formattedDate = formatDate(selectedDate);
+      setDateOfBirth(formattedDate);
+    }
+  };
+
+  const formatDate = (date) => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  const openDatePicker = () => {
+    setShowDatePicker(true);
   };
 
   const validateForm = () => {
     const errors = [];
-    
+
     if (!firstName.trim()) errors.push('First name is required');
     if (!lastName.trim()) errors.push('Last name is required');
     if (!dateOfBirth || dateOfBirth.length < 10) errors.push('Valid date of birth is required');
     if (!gender) errors.push('Gender selection is required');
-    if (!email.includes('@')) errors.push('Valid email is required');
     
+    if (!validateEmail(email)) errors.push('Valid email address is required');
+
     if (!address.trim()) errors.push('Address is required');
     if (!city.trim()) errors.push('City is required');
     if (!state.trim()) errors.push('State/Province is required');
-    if (!zipCode.trim()) errors.push('ZIP/Postal code is required');
+    if (!validateZipCode(zipCode)) {
+      if (country === 'Pakistan') {
+        errors.push('ZIP code must be exactly 4 digits for Pakistan');
+      } else {
+        errors.push(`Valid ZIP/Postal code is required for ${country}`);
+      }
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      errors.push('Password must meet all requirements (8+ characters, uppercase, lowercase, number)');
+    }
     
-    if (password.length < 8) errors.push('Password must be at least 8 characters');
     if (password !== confirmPassword) errors.push('Passwords do not match');
     if (!agreeToTerms) errors.push('You must agree to Terms and Conditions');
-    
+
     if (errors.length > 0) {
       Alert.alert('Please fix the following errors:', errors.join('\n'));
       return false;
     }
-    
+
     return true;
   };
 
@@ -107,7 +165,6 @@ export default function SignUpScreen() {
         dateOfBirth,
         gender,
         email,
-        alternatePhone,
         address,
         city,
         state,
@@ -116,19 +173,19 @@ export default function SignUpScreen() {
         password,
         agreeToMarketing
       };
-      
+
       await signUpWithEmail(email, userData);
-      
+
       router.push({
         pathname: '/(auth)/otp-verification',
-        params: { 
-          method: 'email', 
+        params: {
+          method: 'email',
           contact: email,
           type: 'signup',
           userData: JSON.stringify(userData)
         }
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Sign up error:', error);
       Alert.alert('Error', error.message || 'Failed to create account');
     } finally {
@@ -136,10 +193,11 @@ export default function SignUpScreen() {
     }
   };
 
-  const isValid = firstName.trim() && lastName.trim() && dateOfBirth.length === 10 && 
-                  gender && email.includes('@') &&
-                  address.trim() && city.trim() && state.trim() && zipCode.trim() &&
-                  password.length >= 8 && password === confirmPassword && agreeToTerms;
+  const passwordValidation = validatePassword(password);
+  const isFormValid = firstName.trim() && lastName.trim() && dateOfBirth.length === 10 &&
+    gender && validateEmail(email) &&
+    address.trim() && city.trim() && state.trim() && validateZipCode(zipCode) &&
+    passwordValidation.isValid && password === confirmPassword && agreeToTerms;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -164,8 +222,6 @@ export default function SignUpScreen() {
 
           {/* Personal Information Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Personal Information</Text>
-            
             <View style={styles.row}>
               <View style={[styles.inputContainer, styles.halfWidth]}>
                 <Text style={styles.label}>First Name *</Text>
@@ -178,7 +234,7 @@ export default function SignUpScreen() {
                   autoCapitalize="words"
                 />
               </View>
-              
+
               <View style={[styles.inputContainer, styles.halfWidth]}>
                 <Text style={styles.label}>Last Name *</Text>
                 <TextInput
@@ -194,49 +250,61 @@ export default function SignUpScreen() {
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Date of Birth * (DD/MM/YYYY)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="DD/MM/YYYY"
-                placeholderTextColor={Colors.textLight}
-                value={dateOfBirth}
-                onChangeText={handleDateChange}
-                keyboardType="numeric"
-                maxLength={10}
-              />
+              <TouchableOpacity style={styles.datePickerButton} onPress={openDatePicker}>
+                <Text style={[styles.datePickerText, !dateOfBirth && styles.placeholderText]}>
+                  {dateOfBirth || 'Select your date of birth'}
+                </Text>
+                <Text style={styles.calendarIcon}>📅</Text>
+              </TouchableOpacity>
+              
+              {showDatePicker && (
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDateChange}
+                  maximumDate={new Date()}
+                  minimumDate={new Date(1900, 0, 1)}
+                />
+              )}
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Gender *</Text>
-              <View style={styles.genderContainer}>
-                {genderOptions.map((option) => (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.genderOption,
-                      gender === option && styles.genderOptionSelected
-                    ]}
-                    onPress={() => setGender(option)}
-                  >
-                    <Text style={[
-                      styles.genderText,
-                      gender === option && styles.genderTextSelected
-                    ]}>
-                      {option}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.genderScrollContainer}
+              >
+                <View style={styles.genderContainer}>
+                  {genderOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.genderOption,
+                        gender === option && styles.genderOptionSelected
+                      ]}
+                      onPress={() => setGender(option)}
+                    >
+                      <Text style={[
+                        styles.genderText,
+                        gender === option && styles.genderTextSelected
+                      ]}>
+                        {option}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
             </View>
-          </View>
-
-          {/* Contact Information Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Contact Information</Text>
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Email Address *</Text>
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  email && !validateEmail(email) && styles.inputError
+                ]}
                 placeholder="Enter your email address"
                 placeholderTextColor={Colors.textLight}
                 value={email}
@@ -245,25 +313,11 @@ export default function SignUpScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+              {email && !validateEmail(email) && (
+                <Text style={styles.errorText}>Please enter a valid email address</Text>
+              )}
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Alternate Phone (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Alternate phone number"
-                placeholderTextColor={Colors.textLight}
-                value={alternatePhone}
-                onChangeText={(text) => handlePhoneChange(text, setAlternatePhone)}
-                keyboardType="phone-pad"
-              />
-            </View>
-          </View>
-
-          {/* Address Information Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Address Information</Text>
-            
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Street Address *</Text>
               <TextInput
@@ -289,7 +343,7 @@ export default function SignUpScreen() {
                   autoCapitalize="words"
                 />
               </View>
-              
+
               <View style={[styles.inputContainer, styles.halfWidth]}>
                 <Text style={styles.label}>State/Province *</Text>
                 <TextInput
@@ -307,15 +361,24 @@ export default function SignUpScreen() {
               <View style={[styles.inputContainer, styles.halfWidth]}>
                 <Text style={styles.label}>ZIP/Postal Code *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    zipCode && !validateZipCode(zipCode) && styles.inputError
+                  ]}
                   placeholder="ZIP Code"
                   placeholderTextColor={Colors.textLight}
                   value={zipCode}
                   onChangeText={setZipCode}
                   keyboardType="numeric"
+                  maxLength={country === 'Pakistan' ? 4 : undefined}
                 />
+                {zipCode && !validateZipCode(zipCode) && (
+                  <Text style={styles.errorText}>
+                    {country === 'Pakistan' ? '4 digits required' : 'Invalid format'}
+                  </Text>
+                )}
               </View>
-              
+
               <View style={[styles.inputContainer, styles.halfWidth]}>
                 <Text style={styles.label}>Country *</Text>
                 <TextInput
@@ -328,12 +391,7 @@ export default function SignUpScreen() {
                 />
               </View>
             </View>
-          </View>
 
-          {/* Password Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Create Password</Text>
-            
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Password *</Text>
               <View style={styles.passwordContainer}>
@@ -376,20 +434,23 @@ export default function SignUpScreen() {
                   <Text style={styles.eyeText}>{showConfirmPassword ? '👁️' : '👁️‍🗨️'}</Text>
                 </TouchableOpacity>
               </View>
+              {confirmPassword && password !== confirmPassword && (
+                <Text style={styles.errorText}>Passwords do not match</Text>
+              )}
             </View>
 
             {password.length > 0 && (
               <View style={styles.passwordRequirements}>
-                <Text style={[styles.requirement, password.length >= 8 && styles.requirementMet]}>
+                <Text style={[styles.requirement, passwordValidation.hasMinLength && styles.requirementMet]}>
                   • At least 8 characters
                 </Text>
-                <Text style={[styles.requirement, /[A-Z]/.test(password) && styles.requirementMet]}>
+                <Text style={[styles.requirement, passwordValidation.hasUpperCase && styles.requirementMet]}>
                   • One uppercase letter
                 </Text>
-                <Text style={[styles.requirement, /[a-z]/.test(password) && styles.requirementMet]}>
+                <Text style={[styles.requirement, passwordValidation.hasLowerCase && styles.requirementMet]}>
                   • One lowercase letter
                 </Text>
-                <Text style={[styles.requirement, /\d/.test(password) && styles.requirementMet]}>
+                <Text style={[styles.requirement, passwordValidation.hasNumber && styles.requirementMet]}>
                   • One number
                 </Text>
               </View>
@@ -425,9 +486,9 @@ export default function SignUpScreen() {
           </View>
 
           <Button
-            title="Create Account via Email"
+            title="Create Account"
             onPress={handleSendOTP}
-            disabled={!isValid}
+            disabled={!isFormValid}
             loading={isLoading}
             size="large"
             style={styles.button}
@@ -498,12 +559,6 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: Spacing.xl,
   },
-  sectionTitle: {
-    ...Typography.title3,
-    color: Colors.text,
-    marginBottom: Spacing.md,
-    fontWeight: '600',
-  },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -531,38 +586,46 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  methodSelector: {
-    flexDirection: 'row',
+  inputError: {
+    borderColor: '#FF3B30',
+  },
+  errorText: {
+    ...Typography.small,
+    color: '#FF3B30',
+    marginTop: Spacing.xs,
+  },
+  datePickerButton: {
+    ...Typography.body,
     backgroundColor: Colors.backgroundSecondary,
     borderRadius: BorderRadius.md,
-    padding: Spacing.xs,
-    marginBottom: Spacing.md,
-  },
-  methodButton: {
-    flex: 1,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    borderRadius: BorderRadius.sm,
   },
-  methodButtonActive: {
-    backgroundColor: Colors.background,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+  datePickerText: {
+    ...Typography.body,
+    color: Colors.text,
+    flex: 1,
   },
-  methodButtonText: {
-    ...Typography.bodyBold,
-    color: Colors.textSecondary,
+  placeholderText: {
+    color: Colors.textLight,
   },
-  methodButtonTextActive: {
-    color: Colors.primary,
+  calendarIcon: {
+    fontSize: 16,
+    marginLeft: Spacing.sm,
+  },
+  genderScrollContainer: {
+    flexGrow: 1,
   },
   genderContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: Spacing.sm,
+    paddingHorizontal: 2,
   },
   genderOption: {
     backgroundColor: Colors.backgroundSecondary,
@@ -571,6 +634,8 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
     borderColor: Colors.border,
+    minWidth: 80,
+    alignItems: 'center',
   },
   genderOptionSelected: {
     backgroundColor: Colors.primary,
@@ -579,6 +644,7 @@ const styles = StyleSheet.create({
   genderText: {
     ...Typography.caption,
     color: Colors.textSecondary,
+    textAlign: 'center',
   },
   genderTextSelected: {
     color: Colors.background,

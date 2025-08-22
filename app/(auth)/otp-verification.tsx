@@ -12,23 +12,21 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/Button';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
 
 export default function OTPVerificationScreen() {
   const router = useRouter();
-  const { verifyOtp, signInWithEmailOtp, sendPasswordResetOtp, currentEmail, currentOtpType } = useAuth();
+  const { verifyOtp, signUpWithEmail, sendPasswordResetOtp } = useAuth();
   const { method, contact, type, userData } = useLocalSearchParams();
   
-  // Always use 4-digit OTP
-  const otpLength = 4;
+  const otpLength = 4; // 4-digit OTP for all flows
   const initialOtp = new Array(otpLength).fill('');
   
   const [otp, setOtp] = useState(initialOtp);
   const [isLoading, setIsLoading] = useState(false);
-  const [timer, setTimer] = useState(30);
-  const inputRefs = useRef<TextInput[]>([]);
+  const [timer, setTimer] = useState(60);
+  const inputRefs = useRef([]);
 
   useEffect(() => {
     if (timer > 0) {
@@ -39,7 +37,7 @@ export default function OTPVerificationScreen() {
     }
   }, [timer]);
 
-  const handleOtpChange = (value: string, index: number) => {
+  const handleOtpChange = (value, index) => {
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
@@ -50,7 +48,7 @@ export default function OTPVerificationScreen() {
     }
   };
 
-  const handleKeyPress = (key: string, index: number) => {
+  const handleKeyPress = (key, index) => {
     if (key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -58,49 +56,49 @@ export default function OTPVerificationScreen() {
 
   const handleVerifyOTP = async () => {
     const otpString = otp.join('');
-    if (otpString.length !== otpLength) return;
+    if (otpString.length !== otpLength) {
+      Alert.alert('Invalid OTP', `Please enter all ${otpLength} digits`);
+      return;
+    }
 
     setIsLoading(true);
     try {
       console.log('Verifying OTP:', {
-        email: currentEmail || contact,
+        email: contact,
         otp: otpString,
-        type: currentOtpType || type
+        type: type
       });
 
-      // For development - accept any 4-digit OTP or the real one from logs
-      if (otpString === '1234' || otpString === '0000' || otpString.length === 4) {
-        console.log('OTP accepted:', otpString);        
+      // Call the verify OTP function from auth context
+      const result = await verifyOtp(String(contact), otpString, String(type));
+      
+      if (result.success) {
         // Navigate based on type
         if (type === 'forgot-password') {
           router.push({
             pathname: '/(auth)/reset-password',
             params: { contact, method }
           });
+        } else if (type === 'signup') {
+          // Complete the signup process
+          if (userData) {
+            const parsedUserData = JSON.parse(String(userData));
+            // Account created successfully during OTP verification
+            router.replace('/(tabs)');
+          } else {
+            router.replace('/(tabs)');
+          }
         } else {
           router.replace('/(tabs)');
         }
-        return;
-      }
-
-      // This won't work until Supabase settings are fixed
-      await verifyOtp(otpString);
-      
-      if (type === 'forgot-password') {
-        router.push({
-          pathname: '/(auth)/reset-password',
-          params: { contact, method }
-        });
       } else {
-        router.replace('/(tabs)');
+        throw new Error(result.message || 'Invalid OTP');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('OTP verification error:', error);
-      
-      // For testing, show the real OTP from console
       Alert.alert(
-        'OTP Error', 
-        `${error.message}\n\nFor testing: Use the OTP from console logs or try 1234`,
+        'Verification Failed', 
+        error.message || 'Invalid OTP. Please try again.',
         [
           { text: 'OK', onPress: () => {
             setOtp(initialOtp);
@@ -115,18 +113,21 @@ export default function OTPVerificationScreen() {
 
   const handleResendOTP = async () => {
     try {
-      setTimer(30);
+      setTimer(60);
       setOtp(initialOtp);
       inputRefs.current[0]?.focus();
       
       if (type === 'forgot-password') {
         await sendPasswordResetOtp(String(contact));
-      } else {
-        await signInWithEmailOtp(String(contact));
+        Alert.alert('Success', 'Reset code sent to your email');
+      } else if (type === 'signup') {
+        // Resend signup OTP
+        await signUpWithEmail(String(contact), userData ? JSON.parse(String(userData)) : {});
+        Alert.alert('Success', 'Verification code sent to your email');
       }
       
       console.log('OTP resent successfully');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Resend OTP error:', error);
       Alert.alert('Error', error.message || 'Failed to resend OTP');
     }
@@ -136,15 +137,17 @@ export default function OTPVerificationScreen() {
 
   const getTitle = () => {
     if (type === 'forgot-password') return 'Enter Reset Code';
-    if (type === 'signup') return 'Verify Your Account';
+    if (type === 'signup') return 'Verify Your Email';
     return 'Enter Verification Code';
   };
 
   const getSubtitle = () => {
     if (type === 'forgot-password') {
-      return `We sent a 4-digit reset code to ${contact}`;
+      return `We sent a ${otpLength}-digit reset code to ${contact}`;
+    } else if (type === 'signup') {
+      return `We sent a ${otpLength}-digit verification code to ${contact}`;
     }
-    return `We sent a 4-digit verification code to ${contact}`;
+    return `We sent a ${otpLength}-digit verification code to ${contact}`;
   };
 
   return (
@@ -173,6 +176,9 @@ export default function OTPVerificationScreen() {
             <Text style={styles.subtitle}>
               {getSubtitle()}
             </Text>
+            <Text style={styles.note}>
+              Check your email and enter the code below
+            </Text>
           </View>
 
           <View style={styles.otpContainer}>
@@ -195,12 +201,13 @@ export default function OTPVerificationScreen() {
                 maxLength={1}
                 textAlign="center"
                 autoFocus={index === 0}
+                selectTextOnFocus
               />
             ))}
           </View>
 
           <Button
-            title={type === 'forgot-password' ? 'Verify Reset Code' : 'Verify Code'}
+            title={type === 'forgot-password' ? 'Verify Reset Code' : 'Verify & Continue'}
             onPress={handleVerifyOTP}
             disabled={!isValid}
             loading={isLoading}
@@ -221,6 +228,10 @@ export default function OTPVerificationScreen() {
               </TouchableOpacity>
             )}
           </View>
+
+          <Text style={styles.helpText}>
+            Having trouble? Check your spam folder or contact support
+          </Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -283,26 +294,29 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.textSecondary,
     textAlign: 'center',
+    marginBottom: Spacing.xs,
+  },
+  note: {
+    ...Typography.small,
+    color: Colors.textLight,
+    textAlign: 'center',
   },
   otpContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: Spacing.xxl,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.sm,
   },
   otpInput: {
-    width: 56,
-    height: 64,
+    width: 48,
+    height: 56,
     borderWidth: 2,
     borderColor: Colors.border,
     borderRadius: BorderRadius.md,
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '600',
     color: Colors.text,
     backgroundColor: Colors.backgroundSecondary,
-  },
-  otpInputLarge: {
-    // Remove this style as all inputs are now large
   },
   otpInputFilled: {
     borderColor: Colors.primary,
@@ -314,6 +328,7 @@ const styles = StyleSheet.create({
   },
   resendContainer: {
     alignItems: 'center',
+    marginBottom: Spacing.md,
   },
   timerText: {
     ...Typography.caption,
@@ -323,5 +338,11 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.primary,
     fontWeight: '600',
+  },
+  helpText: {
+    ...Typography.small,
+    color: Colors.textLight,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
