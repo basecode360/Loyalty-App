@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "bolt-expo-starter",
+    "slug": "bolt-expo-starter",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/images/favicon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.anonymous.boltexpostarter"
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png"
+    }
+  }
+}
