@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
+import {
   ArrowLeft,
   Smartphone,
   Monitor,
@@ -136,7 +136,7 @@ export default function ManageDevicesScreen() {
     if (diffMins < 60) return `${diffMins} minutes ago`;
     if (diffHours < 24) return `${diffHours} hours ago`;
     if (diffDays < 7) return `${diffDays} days ago`;
-    
+
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -187,10 +187,10 @@ export default function ManageDevicesScreen() {
             try {
               // TODO: Implement device sign out API call
               console.log('Signing out device:', device.id);
-              
+
               // Update device status
               setDevices(prev => prev.filter(d => d.id !== device.id));
-              
+
               Alert.alert('Success', `${device.name} has been signed out successfully.`);
             } catch (error) {
               console.error('Error signing out device:', error);
@@ -216,7 +216,7 @@ export default function ManageDevicesScreen() {
 
   const handleSignOutAll = () => {
     const otherDevices = devices.filter(d => !d.isCurrentDevice);
-    
+
     if (otherDevices.length === 0) {
       Alert.alert('No Other Devices', 'You are only signed in on this device.');
       return;
@@ -297,16 +297,12 @@ export default function ManageDevicesScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Manage Devices</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Security Info */}
         <Card style={styles.securityCard}>
           <View style={styles.securityHeader}>
@@ -314,7 +310,7 @@ export default function ManageDevicesScreen() {
             <Text style={styles.securityTitle}>Device Security</Text>
           </View>
           <Text style={styles.securityDescription}>
-            You're signed in to {devices.length} device{devices.length !== 1 ? 's' : ''}. 
+            You're signed in to {devices.length} device{devices.length !== 1 ? 's' : ''}.
             For your security, sign out of devices you don't recognize or no longer use.
           </Text>
         </Card>
@@ -354,33 +350,8 @@ export default function ManageDevicesScreen() {
               </TouchableOpacity>
             )}
           </View>
-          
-          {devices.map(renderDeviceItem)}
-        </View>
 
-        {/* Security Tips */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security Tips</Text>
-          <Card>
-            <View style={styles.tipItem}>
-              <AlertTriangle size={16} color={Colors.warning} />
-              <Text style={styles.tipText}>
-                Always sign out of shared or public devices
-              </Text>
-            </View>
-            <View style={styles.tipItem}>
-              <Shield size={16} color={Colors.accent} />
-              <Text style={styles.tipText}>
-                Review your device list regularly for suspicious activity
-              </Text>
-            </View>
-            <View style={styles.tipItem}>
-              <Smartphone size={16} color={Colors.primary} />
-              <Text style={styles.tipText}>
-                Enable device lock screens for added security
-              </Text>
-            </View>
-          </Card>
+          {devices.map(renderDeviceItem)}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -414,6 +385,9 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: Spacing.xl,
   },
   securityCard: {
     margin: Spacing.lg,

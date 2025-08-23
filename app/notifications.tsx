@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,12 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
 import {
   ArrowLeft,
   Bell,
@@ -21,6 +24,15 @@ import {
   Clock,
   Volume2
 } from 'lucide-react-native';
+
+// Configure notification handler
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -44,6 +56,10 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { userProfile, updateProfile } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [expoPushToken, setExpoPushToken] = useState('');
+  const [notification, setNotification] = useState(false);
+  const notificationListener = useRef();
+  const responseListener = useRef();
   const [settings, setSettings] = useState<NotificationSettings>({
     pushNotifications: true,
     emailNotifications: true,
@@ -66,11 +82,97 @@ export default function NotificationsScreen() {
         marketingEmails: userProfile.agree_to_marketing || false,
       }));
     }
+
+    // Register for push notifications
+    registerForPushNotificationsAsync().then(token => {
+      if (token) {
+        setExpoPushToken(token);
+      }
+    });
+
+    // Notification listeners
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      setNotification(notification);
+    });
+
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('Notification response:', response);
+    });
+
+    return () => {
+      if (notificationListener.current) {
+        Notifications.removeNotificationSubscription(notificationListener.current);
+      }
+      if (responseListener.current) {
+        Notifications.removeNotificationSubscription(responseListener.current);
+      }
+    };
   }, [userProfile]);
+
+  // Function to register for push notifications
+  async function registerForPushNotificationsAsync() {
+    let token;
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+
+    if (Device.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      
+      if (finalStatus !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Push notifications need to be enabled in settings to send test notifications.',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                // Open device settings
+                if (Platform.OS === 'ios') {
+                  Notifications.openNotificationSettingsAsync();
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
+      
+      token = (await Notifications.getExpoPushTokenAsync()).data;
+    } else {
+      Alert.alert('Error', 'Must use physical device for Push Notifications');
+    }
+
+    return token;
+  }
 
   const updateSetting = async (key: keyof NotificationSettings, value: boolean) => {
     try {
       setSettings(prev => ({ ...prev, [key]: value }));
+
+      // If push notifications are being enabled, register for notifications
+      if (key === 'pushNotifications' && value) {
+        const token = await registerForPushNotificationsAsync();
+        if (token) {
+          setExpoPushToken(token);
+        }
+      }
 
       // If marketing emails changed, update user profile
       if (key === 'marketingEmails') {
@@ -121,58 +223,122 @@ export default function NotificationsScreen() {
     </View>
   );
 
-  const handleTestNotification = () => {
-    Alert.alert(
-      '🔔 Test Notification',
-      'This is how notifications will appear on your device.',
-      [{ text: 'OK' }]
-    );
+  const handleTestNotification = async () => {
+    if (!settings.pushNotifications) {
+      Alert.alert(
+        'Push Notifications Disabled',
+        'Please enable Push Notifications first to send a test notification.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Enable',
+            onPress: () => updateSetting('pushNotifications', true),
+          },
+        ]
+      );
+      return;
+    }
+
+    try {
+      // Check if we have permission
+      const { status } = await Notifications.getPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Push notification permission is required. Please enable it in your device settings.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Schedule a local notification
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "🔔 Push Notification Test",
+          body: 'This is a test notification from your Loyalty App! Push notifications are working correctly.',
+          data: { 
+            type: 'test',
+            timestamp: new Date().toISOString(),
+          },
+          sound: settings.soundEnabled ? 'default' : false,
+        },
+        trigger: { seconds: 1 },
+      });
+
+      // Show success message
+      Alert.alert(
+        '✅ Test Sent!',
+        'A test notification will appear in 1 second. Check your notification panel if you don\'t see it.',
+        [{ text: 'OK' }]
+      );
+
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      Alert.alert(
+        'Error',
+        'Failed to send test notification. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
-  const handleManagePermissions = () => {
-    Alert.alert(
-      'Notification Permissions',
-      'To change system notification permissions, go to your device Settings > Apps > LoyaltyApp > Notifications.',
-      [
-        {
-          text: 'Open Settings',
-          onPress: () => {
-            // TODO: Open device settings
-            console.log('Opening device settings...');
+  const handleManagePermissions = async () => {
+    try {
+      await Notifications.openNotificationSettingsAsync();
+    } catch (error) {
+      Alert.alert(
+        'Notification Permissions',
+        'To change system notification permissions, go to your device Settings > Apps > LoyaltyApp > Notifications.',
+        [
+          {
+            text: 'OK',
+            style: 'default',
           },
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        <TouchableOpacity onPress={handleTestNotification}>
-          <Bell size={24} color={Colors.primary} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Quick Actions */}
-        <Card style={styles.actionsCard}>
-          <TouchableOpacity style={styles.actionButton} onPress={handleTestNotification}>
-            <Bell size={20} color={Colors.primary} />
-            <Text style={styles.actionButtonText}>Send Test Notification</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={handleManagePermissions}>
-            <Shield size={20} color={Colors.primary} />
-            <Text style={styles.actionButtonText}>Manage Permissions</Text>
-          </TouchableOpacity>
-        </Card>
+        <View style={styles.quickActionsSection}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsContainer}>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={handleTestNotification}
+              activeOpacity={0.7}
+            >
+              <View style={styles.actionIcon}>
+                <Bell size={24} color={Colors.primary} />
+              </View>
+              <Text style={styles.actionTitle}>Test Notification</Text>
+              <Text style={styles.actionDescription}>Send a sample notification</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={handleManagePermissions}
+              activeOpacity={0.7}
+            >
+              <View style={styles.actionIcon}>
+                <Shield size={24} color={Colors.accent} />
+              </View>
+              <Text style={styles.actionTitle}>Manage Permissions</Text>
+              <Text style={styles.actionDescription}>Configure system settings</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Delivery Methods */}
         <View style={styles.section}>
@@ -266,43 +432,12 @@ export default function NotificationsScreen() {
         <Card style={styles.privacyCard}>
           <View style={styles.privacyHeader}>
             <Shield size={20} color={Colors.accent} />
-            <Text style={styles.privacyTitle}>Privacy Notice</Text>
+            <Text style={styles.privacyTitle}>Privacy & Control</Text>
           </View>
           <Text style={styles.privacyText}>
-            We respect your privacy. You can change these settings anytime.
-            We'll never share your personal information with third parties without your consent.
+            You have full control over your notification preferences. These settings are saved securely and can be changed at any time. We respect your privacy and will never send unwanted notifications.
           </Text>
         </Card>
-
-        {/* Summary */}
-        <Card style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Notification Summary</Text>
-          <View style={styles.summaryStats}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Active Methods</Text>
-              <Text style={styles.summaryValue}>
-                {[settings.pushNotifications, settings.emailNotifications, settings.smsNotifications]
-                  .filter(Boolean).length} / 3
-              </Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Notification Types</Text>
-              <Text style={styles.summaryValue}>
-                {[
-                  settings.pointsUpdates,
-                  settings.receiptProcessing,
-                  settings.promotions,
-                  settings.securityAlerts,
-                  settings.marketingEmails,
-                  settings.weeklyDigest
-                ].filter(Boolean).length} / 6
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -313,42 +448,57 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.backgroundSecondary,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  headerTitle: {
-    ...Typography.title3,
-    color: Colors.text,
-    fontWeight: '600',
-  },
   scrollView: {
     flex: 1,
   },
-  actionsCard: {
+  scrollContent: {
+    paddingBottom: Spacing.xl,
+  },
+  quickActionsSection: {
     margin: Spacing.lg,
+  },
+  actionsContainer: {
     flexDirection: 'row',
     gap: Spacing.md,
   },
   actionButton: {
     flex: 1,
-    flexDirection: 'row',
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+    padding: Spacing.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${Colors.primary}15`,
-    paddingVertical: Spacing.md,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.text,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  actionButtonText: {
+  actionIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: `${Colors.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  actionTitle: {
     ...Typography.bodyBold,
-    color: Colors.primary,
-    marginLeft: Spacing.sm,
+    color: Colors.text,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: Spacing.xs,
+  },
+  actionDescription: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 16,
   },
   section: {
     marginBottom: Spacing.lg,
@@ -358,14 +508,15 @@ const styles = StyleSheet.create({
     ...Typography.bodyBold,
     color: Colors.text,
     fontWeight: '600',
-    marginBottom: Spacing.sm,
-    marginLeft: Spacing.xs,
+    marginBottom: Spacing.md,
+    fontSize: 16,
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -393,6 +544,7 @@ const styles = StyleSheet.create({
     ...Typography.bodyBold,
     color: Colors.text,
     marginBottom: Spacing.xs,
+    fontSize: 15,
   },
   settingTitleDisabled: {
     color: Colors.textLight,
@@ -401,13 +553,13 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.textSecondary,
     lineHeight: 18,
+    fontSize: 13,
   },
   settingDescriptionDisabled: {
     color: Colors.textLight,
   },
   privacyCard: {
     marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
     backgroundColor: `${Colors.accent}10`,
     borderWidth: 1,
     borderColor: `${Colors.accent}30`,
@@ -421,46 +573,12 @@ const styles = StyleSheet.create({
     ...Typography.bodyBold,
     color: Colors.text,
     marginLeft: Spacing.sm,
+    fontWeight: '600',
   },
   privacyText: {
     ...Typography.body,
     color: Colors.textSecondary,
     lineHeight: 22,
-  },
-  summaryCard: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  summaryTitle: {
-    ...Typography.bodyBold,
-    color: Colors.text,
-    marginBottom: Spacing.md,
-  },
-  summaryStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
-  },
-  summaryValue: {
-    ...Typography.title3,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  summaryDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: Colors.border,
-    marginHorizontal: Spacing.md,
-  },
-  bottomPadding: {
-    height: Spacing.xl,
+    fontSize: 14,
   },
 });

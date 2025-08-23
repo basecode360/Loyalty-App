@@ -292,9 +292,6 @@ export default function ProfileScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>LoyaltyApp v1.0.0</Text>
-          <Text style={styles.footerSubtext}>
-            User ID: {userProfile?.id?.substring(0, 8) || 'Unknown'}
-          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -437,9 +434,5 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.textLight,
     marginBottom: Spacing.xs,
-  },
-  footerSubtext: {
-    ...Typography.small,
-    color: Colors.textLight,
   },
 });

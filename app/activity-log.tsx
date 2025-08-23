@@ -6,6 +6,7 @@ import {
   FlatList,
   RefreshControl,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -304,82 +305,88 @@ export default function ActivityLogScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Activity Log</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      {/* Security Summary */}
-      <Card style={styles.summaryCard}>
-        <View style={styles.summaryHeader}>
-          <Shield size={24} color={Colors.accent} />
-          <Text style={styles.summaryTitle}>Security Summary</Text>
-        </View>
-        <Text style={styles.summaryDescription}>
-          Last {activities.length} activities. Monitor your account for suspicious activity.
-        </Text>
-        <View style={styles.riskSummary}>
-          <View style={styles.riskItem}>
-            <View style={[styles.riskIndicator, { backgroundColor: Colors.error }]} />
-            <Text style={styles.riskText}>
-              {activities.filter(a => a.riskLevel === 'high').length} High Risk
-            </Text>
-          </View>
-          <View style={styles.riskItem}>
-            <View style={[styles.riskIndicator, { backgroundColor: Colors.warning }]} />
-            <Text style={styles.riskText}>
-              {activities.filter(a => a.riskLevel === 'medium').length} Medium Risk
-            </Text>
-          </View>
-          <View style={styles.riskItem}>
-            <View style={[styles.riskIndicator, { backgroundColor: Colors.accent }]} />
-            <Text style={styles.riskText}>
-              {activities.filter(a => a.riskLevel === 'low').length} Normal
-            </Text>
-          </View>
-        </View>
-      </Card>
-
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        {renderFilterButton('all', 'All', activities.length)}
-        {renderFilterButton('security', 'Security', activities.filter(a => 
-          ['login', 'logout', 'password_change', 'device_added', 'security_event'].includes(a.type)
-        ).length)}
-        {renderFilterButton('account', 'Account', activities.filter(a => 
-          ['signup', 'profile_update', 'password_change'].includes(a.type)
-        ).length)}
-        {renderFilterButton('points', 'Points', activities.filter(a => 
-          ['points_earned', 'points_redeemed'].includes(a.type)
-        ).length)}
-      </View>
-
-      {/* Activities List */}
-      <FlatList
-        data={filteredActivities}
-        renderItem={renderActivityItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+      <ScrollView 
+        style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Calendar size={64} color={Colors.textLight} />
-            <Text style={styles.emptyTitle}>No Activities Found</Text>
-            <Text style={styles.emptyDescription}>
-              {filter === 'all' 
-                ? 'Your activity log will appear here.' 
-                : `No ${filter} activities yet.`
-              }
-            </Text>
+      >
+        {/* Security Summary */}
+        <Card style={styles.summaryCard}>
+          <View style={styles.summaryHeader}>
+            <Shield size={24} color={Colors.accent} />
+            <Text style={styles.summaryTitle}>Security Summary</Text>
           </View>
-        }
-      />
+          <Text style={styles.summaryDescription}>
+            Last {activities.length} activities. Monitor your account for suspicious activity.
+          </Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.riskSummary}
+          >
+            <View style={styles.riskItem}>
+              <View style={[styles.riskIndicator, { backgroundColor: Colors.error }]} />
+              <Text style={styles.riskText}>
+                {activities.filter(a => a.riskLevel === 'high').length} High Risk
+              </Text>
+            </View>
+            <View style={styles.riskItem}>
+              <View style={[styles.riskIndicator, { backgroundColor: Colors.warning }]} />
+              <Text style={styles.riskText}>
+                {activities.filter(a => a.riskLevel === 'medium').length} Medium Risk
+              </Text>
+            </View>
+            <View style={styles.riskItem}>
+              <View style={[styles.riskIndicator, { backgroundColor: Colors.accent }]} />
+              <Text style={styles.riskText}>
+                {activities.filter(a => a.riskLevel === 'low').length} Normal
+              </Text>
+            </View>
+          </ScrollView>
+        </Card>
+
+        {/* Filter Buttons */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterContainer}
+        >
+          {renderFilterButton('all', 'All', activities.length)}
+          {renderFilterButton('security', 'Security', activities.filter(a => 
+            ['login', 'logout', 'password_change', 'device_added', 'security_event'].includes(a.type)
+          ).length)}
+          {renderFilterButton('account', 'Account', activities.filter(a => 
+            ['signup', 'profile_update', 'password_change'].includes(a.type)
+          ).length)}
+          {renderFilterButton('points', 'Points', activities.filter(a => 
+            ['points_earned', 'points_redeemed'].includes(a.type)
+          ).length)}
+        </ScrollView>
+
+        {/* Activities List */}
+        <View style={styles.listWrapper}>
+          {filteredActivities.length > 0 ? (
+            filteredActivities.map((item) => (
+              <View key={item.id}>
+                {renderActivityItem({ item })}
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Calendar size={64} color={Colors.textLight} />
+              <Text style={styles.emptyTitle}>No Activities Found</Text>
+              <Text style={styles.emptyDescription}>
+                {filter === 'all' 
+                  ? 'Your activity log will appear here.' 
+                  : `No ${filter} activities yet.`
+                }
+              </Text>
+            </View>
+          )}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -388,6 +395,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.backgroundSecondary,
+  },
+  scrollContainer: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -433,11 +443,13 @@ const styles = StyleSheet.create({
   },
   riskSummary: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: Spacing.lg,
+    paddingRight: Spacing.lg,
   },
   riskItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 100,
   },
   riskIndicator: {
     width: 8,
@@ -448,45 +460,51 @@ const styles = StyleSheet.create({
   riskText: {
     ...Typography.caption,
     color: Colors.textSecondary,
+    fontSize: 12,
   },
   filterContainer: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
+    paddingLeft: Spacing.lg,
+    paddingRight: Spacing.lg,
     marginBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   filterButton: {
-    flex: 1,
     backgroundColor: Colors.background,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 8,
-    marginRight: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.border,
     alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70,
+    height: 50,
   },
   filterButtonActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
   filterButtonText: {
-    ...Typography.caption,
+    fontSize: 11,
     color: Colors.textSecondary,
     fontWeight: '600',
     marginBottom: 2,
+    textAlign: 'center',
   },
   filterButtonTextActive: {
     color: Colors.background,
   },
   filterCount: {
-    ...Typography.small,
+    fontSize: 10,
     color: Colors.textLight,
+    textAlign: 'center',
   },
   filterCountActive: {
     color: Colors.background,
     opacity: 0.8,
   },
-  listContainer: {
+  listWrapper: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
   },

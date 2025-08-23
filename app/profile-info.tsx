@@ -7,25 +7,17 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  Modal,
   Image,
-  ActionSheet,
-  Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, Upload, User, Calendar, X, Check, Edit2 } from 'lucide-react-native';
+import { Camera, Calendar } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { useAuth } from '../../contexts/AuthContext';
-import { Button } from '../../components/ui/Button';
-import { Card } from '../../components/ui/Card';
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
+import { useAuth } from '../contexts/AuthContext';
+import { Card } from '../components/ui/Card';
+import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { Colors, Typography, Spacing, BorderRadius } from '../constants/Colors';
 
 export default function ProfileInfoScreen() {
-  const router = useRouter();
   const { userProfile, updateProfile, user } = useAuth();
   
   // Form state
@@ -45,10 +37,7 @@ export default function ProfileInfoScreen() {
   const [profilePictureUrl, setProfilePictureUrl] = useState('');
 
   // UI state
-  const [isLoading, setIsLoading] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showImagePicker, setShowImagePicker] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
@@ -80,15 +69,6 @@ export default function ProfileInfoScreen() {
       }
     }
   }, [userProfile, user]);
-
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setSelectedDate(selectedDate);
-      const formattedDate = formatDateForInput(selectedDate);
-      setDateOfBirth(formattedDate);
-    }
-  };
 
   const formatDateForInput = (date: Date) => {
     const day = date.getDate().toString().padStart(2, '0');
@@ -191,68 +171,6 @@ export default function ProfileInfoScreen() {
     }
   };
 
-  const validateForm = () => {
-    const errors = [];
-
-    // Only validate editable fields
-    if (!phone && phone !== '') {
-      // Phone is optional, so no error if empty
-    }
-    
-    if (zipCode && country === 'Pakistan' && !/^\d{4}$/.test(zipCode)) {
-      errors.push('ZIP code must be exactly 4 digits for Pakistan');
-    }
-
-    if (errors.length > 0) {
-      Alert.alert('Please fix the following errors:', errors.join('\n'));
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleSave = async () => {
-    if (!validateForm()) return;
-
-    setIsLoading(true);
-    try {
-      console.log('Saving profile updates...');
-
-      const updates = {
-        // Don't update non-editable fields
-        // firstName, lastName, email, dateOfBirth are read-only
-        gender,
-        address,
-        city,
-        state,
-        zipCode,
-        country,
-        agreeToMarketing,
-        alternatePhone,
-        // Add profile picture URL when implemented
-      };
-
-      await updateProfile(updates);
-
-      Alert.alert(
-        'Success!',
-        'Your profile has been updated successfully.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
-      );
-
-    } catch (error: any) {
-      console.error('Profile update error:', error);
-      Alert.alert('Error', error.message || 'Failed to update profile. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const getUserInitials = () => {
     const first = firstName || userProfile?.first_name || '';
     const last = lastName || userProfile?.last_name || '';
@@ -264,44 +182,7 @@ export default function ProfileInfoScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <X size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Personal Information</Text>
-        <TouchableOpacity onPress={handleSave} disabled={isLoading}>
-          {isLoading ? (
-            <LoadingSpinner size={20} />
-          ) : (
-            <Check size={24} color={Colors.primary} />
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Information Notice */}
-        <Card style={styles.infoCard}>
-          <View style={styles.infoHeader}>
-            <User size={20} color={Colors.primary} />
-            <Text style={styles.infoTitle}>Personal Information</Text>
-          </View>
-          <Text style={styles.infoDescription}>
-            Your name, email, and date of birth cannot be changed for security reasons. 
-            Contact support if you need to update these details.
-          </Text>
-          <View style={styles.infoStats}>
-            <Text style={styles.infoStatText}>
-              Account created: {userProfile?.created_at ? 
-                new Date(userProfile.created_at).toLocaleDateString('en-US', { 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                }) : 
-                'Unknown'
-              }
-            </Text>
-          </View>
-        </Card>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>        
         {/* Profile Picture Section */}
         <Card style={styles.pictureCard}>
           <View style={styles.pictureSection}>
@@ -350,7 +231,6 @@ export default function ProfileInfoScreen() {
                 <View style={[styles.input, styles.readOnlyInput]}>
                   <Text style={styles.readOnlyText}>{firstName || 'Not set'}</Text>
                 </View>
-                <Text style={styles.readOnlyNote}>Cannot be changed</Text>
               </View>
 
               <View style={[styles.inputContainer, styles.halfWidth]}>
@@ -358,7 +238,6 @@ export default function ProfileInfoScreen() {
                 <View style={[styles.input, styles.readOnlyInput]}>
                   <Text style={styles.readOnlyText}>{lastName || 'Not set'}</Text>
                 </View>
-                <Text style={styles.readOnlyNote}>Cannot be changed</Text>
               </View>
             </View>
 
@@ -367,7 +246,6 @@ export default function ProfileInfoScreen() {
               <View style={[styles.input, styles.readOnlyInput]}>
                 <Text style={styles.readOnlyText}>{email || 'Not set'}</Text>
               </View>
-              <Text style={styles.readOnlyNote}>Cannot be changed</Text>
             </View>
 
             <View style={styles.inputContainer}>
@@ -378,7 +256,6 @@ export default function ProfileInfoScreen() {
                 </Text>
                 <Calendar size={16} color={Colors.textLight} />
               </View>
-              <Text style={styles.readOnlyNote}>Cannot be changed</Text>
             </View>
 
             {/* Editable Fields */}
@@ -514,27 +391,6 @@ export default function ProfileInfoScreen() {
             </View>
           </Card>
         </View>
-
-        {/* Preferences */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
-          
-          <Card>
-            <TouchableOpacity
-              style={styles.checkboxContainer}
-              onPress={() => setAgreeToMarketing(!agreeToMarketing)}
-            >
-              <View style={[styles.checkbox, agreeToMarketing && styles.checkboxChecked]}>
-                {agreeToMarketing && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-              <Text style={styles.checkboxText}>
-                I want to receive promotional emails and marketing communications
-              </Text>
-            </TouchableOpacity>
-          </Card>
-        </View>
-
-        <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -545,54 +401,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.backgroundSecondary,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  headerTitle: {
-    ...Typography.title3,
-    color: Colors.text,
-    fontWeight: '600',
-  },
   scrollView: {
     flex: 1,
-  },
-  infoCard: {
-    margin: Spacing.lg,
-    backgroundColor: `${Colors.primary}10`,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}30`,
-  },
-  infoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  infoTitle: {
-    ...Typography.bodyBold,
-    color: Colors.text,
-    marginLeft: Spacing.sm,
-  },
-  infoDescription: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-    marginBottom: Spacing.sm,
-  },
-  infoStats: {
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: `${Colors.primary}20`,
-  },
-  infoStatText: {
-    ...Typography.caption,
-    color: Colors.textLight,
   },
   pictureCard: {
     margin: Spacing.lg,
@@ -748,10 +558,6 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontWeight: '600',
   },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
   checkbox: {
     width: 20,
     height: 20,
@@ -763,21 +569,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: Spacing.sm,
     marginTop: 2,
-  },
-  checkboxChecked: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  checkmark: {
-    color: Colors.background,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  checkboxText: {
-    ...Typography.body,
-    color: Colors.text,
-    flex: 1,
-    lineHeight: 22,
   },
   validationText: {
     ...Typography.small,
@@ -793,12 +584,6 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.textSecondary,
     paddingVertical: 0,
-  },
-  readOnlyNote: {
-    ...Typography.small,
-    color: Colors.textLight,
-    marginTop: Spacing.xs,
-    fontStyle: 'italic',
   },
   bottomPadding: {
     height: Spacing.xxl,

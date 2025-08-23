@@ -13,7 +13,6 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   ArrowLeft,
-  Palette,
   Globe,
   Shield,
   Database,
@@ -75,8 +74,8 @@ export default function AppSettingsScreen() {
       'Choose your preferred language',
       [
         { text: 'English', onPress: () => updateSetting('language', 'English') },
-        { text: 'Urdu', onPress: () => updateSetting('language', 'Urdu') },
-        { text: 'Arabic', onPress: () => updateSetting('language', 'Arabic') },
+        { text: 'French', onPress: () => updateSetting('language', 'French') },
+        { text: 'Spanish', onPress: () => updateSetting('language', 'Spanish') },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
@@ -221,14 +220,6 @@ export default function AppSettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>App Settings</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Appearance */}
         <View style={styles.section}>
@@ -348,28 +339,6 @@ export default function AppSettingsScreen() {
             />
           </Card>
         </View>
-
-        {/* App Info */}
-        <Card style={styles.appInfoCard}>
-          <View style={styles.appInfo}>
-            <Text style={styles.appName}>LoyaltyApp</Text>
-            <Text style={styles.appVersion}>Version 1.0.0 (Build 1)</Text>
-            <Text style={styles.appDescription}>
-              Earn points for every purchase and unlock amazing rewards
-            </Text>
-          </View>
-          <View style={styles.appStats}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{user?.id?.substring(0, 8) || 'N/A'}</Text>
-              <Text style={styles.statLabel}>User ID</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>Active</Text>
-              <Text style={styles.statLabel}>Status</Text>
-            </View>
-          </View>
-        </Card>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
