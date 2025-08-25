@@ -171,6 +171,7 @@ export default function PromotionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingBottom: -42,
     backgroundColor: Colors.backgroundSecondary,
   },
   loadingContainer: {

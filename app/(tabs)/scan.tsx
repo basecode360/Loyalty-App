@@ -11,7 +11,7 @@ import {
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, Upload, X, Check } from 'lucide-react-native';
+import { Camera, Upload, X, Check, RotateCcw, FlipHorizontal } from 'lucide-react-native';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
@@ -41,7 +41,9 @@ export default function ScanScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContent}>
-          <Camera size={64} color={Colors.textSecondary} />
+          <View style={styles.permissionIconContainer}>
+            <Camera size={64} color={Colors.primary} />
+          </View>
           <Text style={styles.permissionTitle}>Camera Access Required</Text>
           <Text style={styles.permissionText}>
             We need access to your camera to scan receipts and earn points
@@ -120,6 +122,7 @@ export default function ScanScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header Section */}
       <View style={styles.header}>
         <Text style={styles.title}>Scan Receipt</Text>
         <Text style={styles.subtitle}>
@@ -127,48 +130,84 @@ export default function ScanScreen() {
         </Text>
       </View>
 
+      {/* Camera Section */}
       <View style={styles.cameraContainer}>
         <CameraView 
           style={styles.camera} 
           facing={facing}
           ref={cameraRef}
         >
+          {/* Overlay with Frame */}
           <View style={styles.overlay}>
             <View style={styles.frameOverlay}>
+              <View style={styles.frameBackground} />
               <View style={[styles.corner, styles.topLeft]} />
               <View style={[styles.corner, styles.topRight]} />
               <View style={[styles.corner, styles.bottomLeft]} />
               <View style={[styles.corner, styles.bottomRight]} />
+              
+              {/* Frame guide text */}
+              <View style={styles.frameGuide}>
+                <Text style={styles.frameGuideText}>
+                  Align receipt within frame
+                </Text>
+              </View>
             </View>
           </View>
 
+          {/* Camera Controls */}
           <View style={styles.controls}>
             <TouchableOpacity 
-              style={styles.flipButton}
+              style={styles.controlButton}
               onPress={toggleCameraFacing}
+              activeOpacity={0.7}
             >
-              <Camera size={24} color={Colors.background} />
+              <FlipHorizontal size={24} color={Colors.background} />
             </TouchableOpacity>
             
             <TouchableOpacity 
               style={styles.captureButton}
               onPress={takePicture}
+              activeOpacity={0.8}
             >
-              <View style={styles.captureButtonInner} />
+              <View style={styles.captureButtonInner}>
+                <Camera size={32} color={Colors.background} />
+              </View>
             </TouchableOpacity>
             
-            <View style={styles.placeholder} />
+            <View style={styles.controlButton} />
           </View>
         </CameraView>
       </View>
 
-      <Card style={styles.instructionsCard}>
-        <Text style={styles.instructionsTitle}>Tips for Best Results:</Text>
-        <Text style={styles.instructionText}>• Ensure good lighting</Text>
-        <Text style={styles.instructionText}>• Keep receipt flat and straight</Text>
-        <Text style={styles.instructionText}>• Make sure all text is visible</Text>
-        <Text style={styles.instructionText}>• Avoid shadows and glare</Text>
-      </Card>
+      {/* Instructions Card */}
+      <View style={styles.instructionsSection}>
+        <Card style={styles.instructionsCard}>
+          <View style={styles.instructionsHeader}>
+            <Check size={20} color={Colors.accent} />
+            <Text style={styles.instructionsTitle}>Tips for Best Results</Text>
+          </View>
+          
+          <View style={styles.instructionsList}>
+            <View style={styles.instructionItem}>
+              <Text style={styles.instructionBullet}>•</Text>
+              <Text style={styles.instructionText}>Ensure good lighting conditions</Text>
+            </View>
+            <View style={styles.instructionItem}>
+              <Text style={styles.instructionBullet}>•</Text>
+              <Text style={styles.instructionText}>Keep receipt flat and straight</Text>
+            </View>
+            <View style={styles.instructionItem}>
+              <Text style={styles.instructionBullet}>•</Text>
+              <Text style={styles.instructionText}>Make sure all text is clearly visible</Text>
+            </View>
+            <View style={styles.instructionItem}>
+              <Text style={styles.instructionBullet}>•</Text>
+              <Text style={styles.instructionText}>Avoid shadows and glare on the receipt</Text>
+            </View>
+          </View>
+        </Card>
+      </View>
 
       {/* Confirmation Modal */}
       <Modal
@@ -177,32 +216,47 @@ export default function ScanScreen() {
         presentationStyle="fullScreen"
       >
         <SafeAreaView style={styles.modalContainer}>
+          {/* Modal Header */}
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={retakePhoto}>
+            <TouchableOpacity 
+              style={styles.modalHeaderButton}
+              onPress={retakePhoto}
+              activeOpacity={0.7}
+            >
               <X size={24} color={Colors.text} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Confirm Receipt</Text>
-            <View style={{ width: 24 }} />
+            <View style={styles.modalHeaderButton} />
           </View>
 
+          {/* Image Preview */}
           <View style={styles.imageContainer}>
-            {capturedImage && (
-              <Image source={{ uri: capturedImage }} style={styles.capturedImage} />
-            )}
+            <View style={styles.imageWrapper}>
+              {capturedImage && (
+                <Image source={{ uri: capturedImage }} style={styles.capturedImage} />
+              )}
+            </View>
+            
+            <Text style={styles.imageHelperText}>
+              Make sure the receipt is clear and all details are visible
+            </Text>
           </View>
 
+          {/* Modal Actions */}
           <View style={styles.modalActions}>
             <Button
               title="Retake Photo"
               variant="outline"
               onPress={retakePhoto}
               style={styles.modalButton}
+              icon={<RotateCcw size={20} color={Colors.primary} />}
             />
             <Button
               title="Upload Receipt"
               onPress={handleUploadReceipt}
               loading={isUploading}
               style={styles.modalButton}
+              icon={!isUploading ? <Upload size={20} color={Colors.background} /> : undefined}
             />
           </View>
         </SafeAreaView>
@@ -214,52 +268,84 @@ export default function ScanScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingBottom: -42,
     backgroundColor: Colors.background,
   },
   centerContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: 24,
   },
+  
+  // Header Styles
   header: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
     alignItems: 'center',
+    backgroundColor: Colors.background,
   },
   title: {
     ...Typography.title2,
     color: Colors.text,
-    fontWeight: '600',
-    marginBottom: Spacing.xs,
+    fontWeight: '700',
+    fontSize: 24,
+    marginBottom: 8,
   },
   subtitle: {
     ...Typography.body,
     color: Colors.textSecondary,
     textAlign: 'center',
+    fontSize: 16,
+    lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  
+  // Permission Styles
+  permissionIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.backgroundSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
   },
   permissionTitle: {
     ...Typography.title3,
     color: Colors.text,
-    fontWeight: '600',
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
+    fontWeight: '700',
+    fontSize: 20,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   permissionText: {
     ...Typography.body,
     color: Colors.textSecondary,
     textAlign: 'center',
-    marginBottom: Spacing.lg,
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 32,
+    paddingHorizontal: 20,
   },
   permissionButton: {
     minWidth: 200,
+    paddingVertical: 16,
   },
+  
+  // Camera Styles
   cameraContainer: {
     flex: 1,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-    borderRadius: 16,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 20,
     overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
   },
   camera: {
     flex: 1,
@@ -270,41 +356,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   frameOverlay: {
-    width: '80%',
-    height: '60%',
+    width: '85%',
+    height: '70%',
     position: 'relative',
+  },
+  frameBackground: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderStyle: 'dashed',
+    borderRadius: 12,
   },
   corner: {
     position: 'absolute',
-    width: 20,
-    height: 20,
+    width: 24,
+    height: 24,
     borderColor: Colors.background,
-    borderWidth: 3,
+    borderWidth: 4,
   },
   topLeft: {
-    top: 0,
-    left: 0,
+    top: -2,
+    left: -2,
     borderBottomWidth: 0,
     borderRightWidth: 0,
   },
   topRight: {
-    top: 0,
-    right: 0,
+    top: -2,
+    right: -2,
     borderBottomWidth: 0,
     borderLeftWidth: 0,
   },
   bottomLeft: {
-    bottom: 0,
-    left: 0,
+    bottom: -2,
+    left: -2,
     borderTopWidth: 0,
     borderRightWidth: 0,
   },
   bottomRight: {
-    bottom: 0,
-    right: 0,
+    bottom: -2,
+    right: -2,
     borderTopWidth: 0,
     borderLeftWidth: 0,
   },
+  frameGuide: {
+    position: 'absolute',
+    top: -40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  frameGuideText: {
+    color: Colors.background,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  
+  // Controls
   controls: {
     position: 'absolute',
     bottom: 40,
@@ -315,46 +428,80 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
   },
-  flipButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  controlButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   captureButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
   },
   captureButtonInner: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  placeholder: {
-    width: 50,
-    height: 50,
+  
+  // Instructions
+  instructionsSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   instructionsCard: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
+    borderRadius: 16,
+    padding: 20,
+  },
+  instructionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   instructionsTitle: {
     ...Typography.bodyBold,
     color: Colors.text,
-    marginBottom: Spacing.sm,
+    fontSize: 18,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  instructionsList: {
+    gap: 12,
+  },
+  instructionItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  instructionBullet: {
+    color: Colors.primary,
+    fontSize: 16,
+    fontWeight: 'bold',
+    width: 20,
+    marginTop: 2,
   },
   instructionText: {
-    ...Typography.caption,
+    ...Typography.body,
     color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
+    fontSize: 16,
+    lineHeight: 22,
+    flex: 1,
   },
+  
+  // Modal Styles
   modalContainer: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -363,35 +510,73 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  modalHeaderButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalTitle: {
     ...Typography.title3,
     color: Colors.text,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 20,
   },
+  
+  // Image Preview
   imageContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: Spacing.lg,
+    padding: 20,
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  imageWrapper: {
+    width: '100%',
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: Colors.background,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   capturedImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'contain',
-    borderRadius: 12,
   },
+  imageHelperText: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 16,
+    paddingHorizontal: 20,
+  },
+  
+  // Modal Actions
   modalActions: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    gap: Spacing.md,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    backgroundColor: Colors.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    gap: 16,
   },
   modalButton: {
     flex: 1,
+    paddingVertical: 16,
   },
 });

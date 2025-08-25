@@ -105,38 +105,35 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
+        {/* Header Section */}
         <View style={styles.header}>
           <Text style={styles.greeting}>Welcome back!</Text>
           <Text style={styles.userName}>{getUserDisplayName()}</Text>
-          <Text style={styles.memberInfo}>
-            Member since {userProfile?.created_at ? 
-              new Date(userProfile.created_at).toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'long' 
-              }) : 
-              'Recently'
-            }
-          </Text>
         </View>
 
         {/* Points Balance Card */}
-        <Card style={styles.balanceCard}>
-          <View style={styles.balanceContent}>
-            <View style={styles.balanceInfo}>
-              <Text style={styles.balanceLabel}>Your Points Balance</Text>
-              <Text style={styles.balanceAmount}>
-                {getPointsBalance().toLocaleString()}
-              </Text>
+        <View style={styles.cardContainer}>
+          <Card style={styles.balanceCard}>
+            <View style={styles.balanceContent}>
+              <View style={styles.balanceInfo}>
+                <Text style={styles.balanceLabel}>Your Points Balance</Text>
+                <Text style={styles.balanceAmount}>
+                  {getPointsBalance().toLocaleString()}
+                </Text>
+                <Text style={styles.balanceSubtext}>Points earned</Text>
+              </View>
+              <View style={styles.balanceIcon}>
+                <TrendingUp size={32} color={Colors.background} />
+              </View>
             </View>
-            <View style={styles.balanceIcon}>
-              <TrendingUp size={32} color={Colors.accent} />
-            </View>
-          </View>
-        </Card>
+          </Card>
+        </View>
 
         {/* Quick Actions */}
         <View style={styles.section}>
@@ -145,15 +142,22 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => router.push('/(tabs)/scan')}
+              activeOpacity={0.7}
             >
-              <Scan size={24} color={Colors.primary} />
+              <View style={styles.actionIconContainer}>
+                <Scan size={28} color={Colors.primary} />
+              </View>
               <Text style={styles.actionText}>Scan Receipt</Text>
             </TouchableOpacity>
+            
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => router.push('/(tabs)/promotions')}
+              activeOpacity={0.7}
             >
-              <Tag size={24} color={Colors.primary} />
+              <View style={styles.actionIconContainer}>
+                <Tag size={28} color={Colors.primary} />
+              </View>
               <Text style={styles.actionText}>View Promotions</Text>
             </TouchableOpacity>
           </View>
@@ -163,12 +167,15 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <TouchableOpacity onPress={() => router.push('/points-ledger')}>
+            <TouchableOpacity 
+              onPress={() => router.push('/points-ledger')}
+              activeOpacity={0.7}
+            >
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
           
-          <Card padding="sm">
+          <Card style={styles.activityCard}>
             {recentActivity.length > 0 ? (
               recentActivity.map((transaction, index) => (
                 <ListItem
@@ -176,9 +183,11 @@ export default function HomeScreen() {
                   title={transaction.reason}
                   subtitle={formatDate(transaction.createdAt)}
                   leftElement={
-                    <Text style={styles.transactionIcon}>
-                      {getTransactionIcon(transaction.type)}
-                    </Text>
+                    <View style={styles.transactionIconContainer}>
+                      <Text style={styles.transactionIcon}>
+                        {getTransactionIcon(transaction.type)}
+                      </Text>
+                    </View>
                   }
                   rightElement={
                     <View style={styles.amountContainer}>
@@ -194,19 +203,19 @@ export default function HomeScreen() {
                         {Math.abs(transaction.amount)}
                       </Text>
                       <Text style={styles.balance}>
-                        {transaction.balanceAfter.toLocaleString()}
+                        Balance: {transaction.balanceAfter.toLocaleString()}
                       </Text>
                     </View>
                   }
-                  style={
-                    index === recentActivity.length - 1
-                      ? { borderBottomWidth: 0 }
-                      : undefined
-                  }
+                  style={[
+                    styles.listItem,
+                    index === recentActivity.length - 1 && styles.lastListItem
+                  ]}
                 />
               ))
             ) : (
               <View style={styles.emptyState}>
+                <Text style={styles.emptyStateIcon}>📱</Text>
                 <Text style={styles.emptyText}>No recent activity</Text>
                 <Text style={styles.emptySubtext}>
                   Start scanning receipts to earn points!
@@ -219,20 +228,29 @@ export default function HomeScreen() {
         {/* User Stats */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Your Stats</Text>
-          <Card>
+          <Card style={styles.statsCard}>
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{getPointsBalance()}</Text>
+                <Text style={styles.statValue}>
+                  {getPointsBalance().toLocaleString()}
+                </Text>
                 <Text style={styles.statLabel}>Total Points</Text>
               </View>
+              
               <View style={styles.statDivider} />
+              
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>
+                <Text style={[
+                  styles.statValue,
+                  userProfile?.status === 'active' ? styles.activeStatus : styles.inactiveStatus
+                ]}>
                   {userProfile?.status === 'active' ? 'Active' : 'Inactive'}
                 </Text>
                 <Text style={styles.statLabel}>Account Status</Text>
               </View>
+              
               <View style={styles.statDivider} />
+              
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>
                   {userProfile?.country || 'Not Set'}
@@ -242,6 +260,9 @@ export default function HomeScreen() {
             </View>
           </Card>
         </View>
+
+        {/* Bottom Spacer */}
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -250,40 +271,59 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingBottom: -42,
     backgroundColor: Colors.backgroundSecondary,
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  
+  // Header Styles
   header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    backgroundColor: Colors.background,
   },
   greeting: {
     ...Typography.body,
     color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
+    fontSize: 16,
+    marginBottom: 4,
   },
   userName: {
     ...Typography.title2,
     color: Colors.text,
-    fontWeight: '600',
-    marginBottom: Spacing.xs,
+    fontWeight: '700',
+    fontSize: 24,
+    marginBottom: 4,
   },
-  memberInfo: {
-    ...Typography.caption,
-    color: Colors.textLight,
+  
+  // Card Container
+  cardContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
+  
+  // Balance Card Styles
   balanceCard: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
     backgroundColor: Colors.primary,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 4,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   balanceContent: {
     flexDirection: 'row',
@@ -296,71 +336,121 @@ const styles = StyleSheet.create({
   balanceLabel: {
     ...Typography.body,
     color: Colors.background,
-    opacity: 0.8,
-    marginBottom: Spacing.xs,
+    opacity: 0.9,
+    fontSize: 16,
+    marginBottom: 8,
   },
   balanceAmount: {
     ...Typography.title1,
     color: Colors.background,
-    fontWeight: '700',
-    marginBottom: Spacing.xs,
+    fontWeight: '800',
+    fontSize: 32,
+    marginBottom: 4,
   },
   balanceSubtext: {
     ...Typography.caption,
     color: Colors.background,
-    opacity: 0.9,
+    opacity: 0.8,
+    fontSize: 14,
   },
   balanceIcon: {
     opacity: 0.8,
+    marginLeft: 16,
   },
+  
+  // Section Styles
   section: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 16,
   },
   sectionTitle: {
     ...Typography.title3,
     color: Colors.text,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 20,
   },
   seeAllText: {
     ...Typography.body,
     color: Colors.primary,
     fontWeight: '600',
+    fontSize: 16,
   },
+  
+  // Action Buttons
   actionsContainer: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 16,
   },
   actionButton: {
     flex: 1,
     backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: Spacing.lg,
+    borderRadius: 16,
+    padding: 20,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    minHeight: 100,
+  },
+  actionIconContainer: {
+    marginBottom: 12,
   },
   actionText: {
     ...Typography.bodyBold,
     color: Colors.text,
-    marginTop: Spacing.sm,
+    fontSize: 16,
     textAlign: 'center',
+    fontWeight: '600',
+  },
+  
+  // Activity Card
+  activityCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  
+  // Transaction Styles
+  transactionIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.backgroundSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   transactionIcon: {
-    fontSize: 24,
+    fontSize: 20,
+  },
+  listItem: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  lastListItem: {
+    borderBottomWidth: 0,
   },
   amountContainer: {
     alignItems: 'flex-end',
   },
   amount: {
     ...Typography.bodyBold,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 16,
   },
   amountPositive: {
     color: Colors.accent,
@@ -371,24 +461,45 @@ const styles = StyleSheet.create({
   balance: {
     ...Typography.small,
     color: Colors.textLight,
-    marginTop: Spacing.xs,
+    fontSize: 12,
+    marginTop: 4,
   },
+  
+  // Empty State
   emptyState: {
-    paddingVertical: Spacing.xxl,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
     alignItems: 'center',
+  },
+  emptyStateIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+    opacity: 0.6,
   },
   emptyText: {
     ...Typography.body,
     color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   emptySubtext: {
     ...Typography.caption,
     color: Colors.textLight,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  
+  // Stats Card
+  statsCard: {
+    borderRadius: 16,
+    padding: 20,
   },
   statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   statItem: {
     flex: 1,
@@ -397,18 +508,33 @@ const styles = StyleSheet.create({
   statValue: {
     ...Typography.title3,
     color: Colors.text,
-    fontWeight: '600',
-    marginBottom: Spacing.xs,
+    fontWeight: '700',
+    fontSize: 18,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   statLabel: {
     ...Typography.caption,
     color: Colors.textSecondary,
+    fontSize: 12,
     textAlign: 'center',
+    fontWeight: '500',
   },
   statDivider: {
     width: 1,
-    height: 40,
+    height: 50,
     backgroundColor: Colors.border,
-    marginHorizontal: Spacing.md,
+    marginHorizontal: 16,
+  },
+  activeStatus: {
+    color: Colors.accent,
+  },
+  inactiveStatus: {
+    color: Colors.error,
+  },
+  
+  // Bottom Spacer
+  bottomSpacer: {
+    height: 20,
   },
 });

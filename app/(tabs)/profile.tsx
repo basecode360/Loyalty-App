@@ -101,17 +101,6 @@ export default function ProfileScreen() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // Get verification status
-  const getVerificationStatus = () => {
-    const emailVerified = userProfile?.email_verified || false;
-    const phoneVerified = userProfile?.phone_verified || false;
-    
-    if (emailVerified && phoneVerified) return '✅ Fully Verified';
-    if (emailVerified) return '✅ Email Verified';
-    if (phoneVerified) return '✅ Phone Verified';
-    return '⚠️ Unverified Account';
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -140,9 +129,6 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.userPoints}>
                 {getUserPoints().toLocaleString()} Points
-              </Text>
-              <Text style={styles.verificationStatus}>
-                {getVerificationStatus()}
               </Text>
             </View>
           </View>
@@ -253,22 +239,6 @@ export default function ProfileScreen() {
 
             <View style={styles.accountDetail}>
               <View style={styles.detailRow}>
-                <Activity size={16} color={Colors.textSecondary} />
-                <Text style={styles.detailLabel}>Account Status</Text>
-              </View>
-              <Text style={[
-                styles.detailValue,
-                { color: userProfile?.status === 'active' ? Colors.accent : Colors.error }
-              ]}>
-                {userProfile?.status ? 
-                  userProfile.status.charAt(0).toUpperCase() + userProfile.status.slice(1) 
-                  : 'Unknown'
-                }
-              </Text>
-            </View>
-
-            <View style={styles.accountDetail}>
-              <View style={styles.detailRow}>
                 <Mail size={16} color={Colors.textSecondary} />
                 <Text style={styles.detailLabel}>Email Status</Text>
               </View>
@@ -301,6 +271,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingBottom: -42,
     backgroundColor: Colors.backgroundSecondary,
   },
   scrollView: {
@@ -369,10 +340,6 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontWeight: '600',
     marginBottom: Spacing.xs,
-  },
-  verificationStatus: {
-    ...Typography.caption,
-    color: Colors.textLight,
   },
   section: {
     marginTop: Spacing.lg,
