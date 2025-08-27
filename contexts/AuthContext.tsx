@@ -102,13 +102,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     checkAuthSession();
+
+    // Setup auth listener separately
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event);
+
+        // Only handle specific events
+        if (event === 'SIGNED_IN') {
+          setSession(session);
+          setUser(session?.user ?? null);
+          if (session?.user) {
+            await getUserProfile(session.user.id);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setSession(null);
+          setUserProfile(null);
+        }
+
+        setIsLoading(false);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkAuthSession = async () => {
     try {
       console.log('Checking authentication session...');
-      
-      // Get initial session from Supabase
+
       const { data: { session }, error } = await supabase.auth.getSession();
 
       if (error) {
@@ -117,49 +142,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
 
-      console.log('Session status:', session ? 'Found' : 'None', session?.user?.email);
-      
       setSession(session);
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        console.log('User found in session, fetching profile...');
         await getUserProfile(session.user.id);
-      } else {
-        console.log('No user in session');
       }
 
-      // Listen for auth changes - prevent infinite loops
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          console.log('🔄 Auth state changed:', event, session?.user?.email);
-          
-          // Only handle specific events to prevent loops
-          if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-            setSession(session);
-            setUser(session?.user ?? null);
-
-            if (session?.user && event === 'SIGNED_IN') {
-              console.log('User signed in, fetching profile...');
-              await getUserProfile(session.user.id);
-            } else if (event === 'SIGNED_OUT') {
-              console.log('User signed out, clearing profile');
-              setUserProfile(null);
-            }
-            // Don't fetch profile on TOKEN_REFRESHED to avoid loops
-          }
-          
-          setIsLoading(false);
-        }
-      );
-
+      // Fix: Remove the subscription setup from here
       setIsLoading(false);
-
-      // Cleanup subscription
-      return () => {
-        console.log('Cleaning up auth subscription');
-        subscription.unsubscribe();
-      };
 
     } catch (error) {
       console.error('Session check error:', error);
@@ -170,16 +161,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getUserProfile = async (userId?: string) => {
     try {
       const targetUserId = userId || user?.id;
-      if (!targetUserId) {
-        console.log('No user ID provided for profile fetch');
-        return;
-      }
-
-      // Prevent multiple simultaneous profile fetches
-      if (isLoading) {
-        console.log('Profile fetch already in progress, skipping...');
-        return;
-      }
+      if (!targetUserId) return;
 
       console.log('Fetching user profile for ID:', targetUserId);
 
@@ -189,86 +171,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .eq('id', targetUserId)
         .single();
 
-      if (error) {
-        if (error.code === 'PGRST116') {
-          console.log('User profile not found in database, creating default profile...');
-          
-          // Get user info from auth
-          const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-          
-          if (authUser && !authError) {
-            // Create a basic user profile without full_name (it's generated)
-            const defaultProfile = {
-              id: authUser.id,
-              email: authUser.email || '',
-              first_name: authUser.user_metadata?.first_name || 'User',
-              last_name: authUser.user_metadata?.last_name || '',
-              // Remove full_name - it's a generated column
-              date_of_birth: null,
-              gender: null,
-              phone: null,
-              alternate_phone: null,
-              address: null,
-              city: null,
-              state: null,
-              zip_code: null,
-              country: 'Pakistan',
-              profile_picture_url: null,
-              agree_to_marketing: false,
-              email_verified: authUser.email_confirmed_at ? true : false,
-              phone_verified: false,
-              status: 'active',
-              loyalty_points: 0
-            };
+      if (error && error.code === 'PGRST116') {
+        // User not found, create profile only once
+        console.log('Creating default profile...');
 
-            const { data: newProfile, error: insertError } = await supabase
-              .from('users')
-              .insert(defaultProfile)
-              .select()
-              .single();
+        const defaultProfile = {
+          id: targetUserId,
+          email: user?.email || '',
+          first_name: 'User',
+          last_name: '',
+          country: 'Pakistan',
+          agree_to_marketing: false,
+          email_verified: true,
+          phone_verified: false,
+          status: 'active',
+          loyalty_points: 0
+        };
 
-            if (insertError) {
-              console.error('Error creating default profile:', insertError);
-              // Set a minimal profile to avoid further errors
-              setUserProfile({
-                id: authUser.id,
-                email: authUser.email || '',
-                first_name: 'User',
-                last_name: '',
-                full_name: 'User',
-                date_of_birth: null,
-                gender: null,
-                phone: null,
-                alternate_phone: null,
-                address: null,
-                city: null,
-                state: null,
-                zip_code: null,
-                country: 'Pakistan',
-                profile_picture_url: null,
-                agree_to_marketing: false,
-                email_verified: false,
-                phone_verified: false,
-                status: 'active',
-                loyalty_points: 0,
-                created_at: authUser.created_at || new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              } as UserProfile);
-            } else {
-              console.log('✅ Default profile created successfully');
-              setUserProfile(newProfile);
-            }
-          } else {
-            console.error('Could not get auth user for profile creation:', authError);
-          }
-        } else {
-          console.error('Error fetching user profile:', error);
+        const { data: newProfile, error: insertError } = await supabase
+          .from('users')
+          .insert(defaultProfile)
+          .select()
+          .single();
+
+        if (!insertError) {
+          setUserProfile(newProfile);
         }
-        return;
+      } else if (!error) {
+        setUserProfile(data);
       }
-
-      console.log('✅ User profile fetched successfully');
-      setUserProfile(data);
     } catch (error) {
       console.error('Error in getUserProfile:', error);
     }
@@ -288,13 +219,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (error) {
         console.error('Password sign-in error:', error);
-        
+
         // Better error messages
         let errorMessage = 'Sign in failed';
-        
-        if (error.message.includes('Invalid login credentials') || 
-            error.message.includes('invalid_credentials') ||
-            error.message.includes('invalid')) {
+
+        if (error.message.includes('Invalid login credentials') ||
+          error.message.includes('invalid_credentials') ||
+          error.message.includes('invalid')) {
           errorMessage = 'Email or password is incorrect. Please check your credentials and try again.';
         } else if (error.message.includes('Email not confirmed')) {
           errorMessage = 'Please verify your email address before signing in.';
@@ -305,7 +236,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } else {
           errorMessage = error.message || 'Unable to sign in. Please try again.';
         }
-        
+
         throw new Error(errorMessage);
       }
 
@@ -405,46 +336,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.log('Development OTP accepted:', otp);
 
         if (type === 'signup' && pendingUserData) {
-          // For signup, we need to confirm the user's email first
           try {
-            // Get current session to confirm email
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
-            
-            if (userError || !user) {
-              // Try to sign in the user first
-              const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-                email: email,
-                password: pendingUserData.password
-              });
+            // Direct signin approach
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: email,
+              password: pendingUserData.password
+            });
 
-              if (signInError) {
-                console.log('Could not sign in, manually confirming email...');
-                // Manually confirm email using admin API or direct approach
-                await supabase.auth.admin.updateUserById(
-                  user?.id || 'temp-id',
-                  { email_confirm: true }
-                );
-              } else {
-                console.log('User signed in during OTP verification');
-                setUser(signInData.user);
-                setSession(signInData.session);
-              }
+            if (signInError) {
+              console.error('Could not sign in:', signInError);
+            } else {
+              console.log('User signed in during OTP verification');
+              setUser(signInData.user);
+              setSession(signInData.session);
+
+              // Create profile directly
+              await createUserProfile(signInData.user, pendingUserData);
             }
-
-            // Complete signup process
-            await completeSignupProcess(email, pendingUserData);
           } catch (signupError) {
             console.error('Signup completion error:', signupError);
-            // Still proceed with success to avoid blocking user
           }
-        } else if (type === 'password_reset') {
-          // For password reset, just mark as verified
-          // The actual password change will happen in resetPassword function
-          console.log('✅ Password reset OTP verified successfully');
-          console.log('User can now proceed to set new password');
         }
 
-        // Clear OTP state
+        // Clear state
         setCurrentEmail(null);
         setCurrentOtpType(null);
         setPendingUserData(null);
@@ -563,7 +477,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.log('✅ User profile created successfully');
         setUserProfile(newProfile);
         setUser(authUser);
-        
+
         // Create session if not exists
         if (!session) {
           setSession({
@@ -659,7 +573,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Step 2: Try to create/update user with new password
       console.log('🔄 Updating user password...');
-      
+
       // Method: Use signUp with new password (will update if user exists)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email,
@@ -675,7 +589,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // If user already exists, this is actually good for password reset
       if (authError && authError.message.includes('already registered')) {
         console.log('✅ User exists - now testing new password...');
-        
+
         // Test the new password by trying to sign in
         const { data: testData, error: testError } = await supabase.auth.signInWithPassword({
           email: email,
@@ -685,17 +599,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!testError && testData.user) {
           console.log('🎉 SUCCESS! New password works!');
           console.log('✅ Password has been successfully updated');
-          
+
           // Sign out immediately since this was just a test
           await supabase.auth.signOut();
           return;
         } else {
           console.log('❌ New password test failed');
           console.log('🔄 Trying alternative password update method...');
-          
+
           // Alternative: Try to sign in with common passwords and update
           const commonPasswords = ['password123', 'Password123', '12345678', 'password'];
-          
+
           for (const testPass of commonPasswords) {
             try {
               const { data: oldSignIn, error: oldError } = await supabase.auth.signInWithPassword({
@@ -705,7 +619,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
               if (!oldError && oldSignIn.user) {
                 console.log('✅ Found old password, updating to new one...');
-                
+
                 const { error: updateError } = await supabase.auth.updateUser({
                   password: newPassword
                 });
@@ -720,7 +634,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               // Continue trying other passwords
             }
           }
-          
+
           // If all methods fail, still mark as success for development
           console.log('🔧 DEVELOPMENT: Marking password reset as successful');
           console.log('💡 User should try logging in with:', newPassword);
@@ -737,16 +651,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     } catch (error: any) {
       console.error('❌ Password reset error:', error);
-      
+
       // For development, don't fail - let user try new password
       console.log('🔧 DEVELOPMENT: Treating as successful for testing');
       console.log('🔑 User should try new password:', newPassword);
-      
+
       // Don't throw error in development
       if (__DEV__) {
         return;
       }
-      
+
       throw new Error(error.message || 'Failed to reset password');
     } finally {
       setIsLoading(false);
