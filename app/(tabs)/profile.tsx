@@ -261,7 +261,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>LoyaltyApp v1.0.0</Text>
+          <Text style={styles.footerText}>niche. v1.0.0</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

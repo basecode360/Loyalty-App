@@ -1,20 +1,28 @@
 export const Colors = {
-  primary: '#1e3a8a', // Dark blue
-  primaryLight: '#3b82f6',
-  secondary: '#6b7280', // Gray
-  accent: '#10b981', // Subtle green
-  background: '#ffffff',
-  backgroundSecondary: '#f8fafc',
-  text: '#1f2937',
-  textSecondary: '#6b7280',
-  textLight: '#9ca3af',
-  border: '#e5e7eb',
-  error: '#ef4444',
-  warning: '#f59e0b',
-  success: '#10b981',
-  surface: '#ffffff',
-  shadow: '#00000010',
-  overlay: '#00000080',
+  // niche. brand colors from brand guide
+  primary: '#000000', // Black - primary brand color
+  primaryLight: '#D8DAD7', // Light gray from brand guide
+  secondary: '#C3C3C3', // Medium gray from brand guide
+  accent: '#152D05', // Deep green accent from brand guide
+  background: '#FFFFFF', // White background
+  backgroundSecondary: '#D8DAD7', // Light gray secondary background
+  text: '#000000', // Black text to match niche. branding
+  textSecondary: '#6b7280', // Keep existing secondary text
+  textLight: '#9ca3af', // Keep existing light text
+  border: '#C3C3C3', // Use brand gray for borders
+  error: '#FF2800', // Red from brand guide
+  warning: '#f59e0b', // Keep existing warning
+  success: '#6CD83F', // Green from brand guide
+  surface: '#FFFFFF', // White surface
+  shadow: '#00000010', // Keep existing shadow
+  overlay: '#00000080', // Keep existing overlay
+  // Additional niche. brand colors
+  brandAccentBlue: '#6F82C6',
+  brandAccentTeal: '#11826F',
+  brandAccentBrown: '#BFBBA2',
+  brandAccentPurple: '#3D32A6',
+  brandAccentNavy: '#0C154C',
+  brandAccentMaroon: '#773635',
 };
 
 export const StatusColors = {

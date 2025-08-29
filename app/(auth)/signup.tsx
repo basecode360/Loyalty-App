@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/Button';
+import { NicheLogo } from '../../components/ui/NicheLogo';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
 
 export default function SignUpScreen() {
@@ -207,10 +208,7 @@ export default function SignUpScreen() {
       >
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.logoContainer}>
-            <View style={styles.logo}>
-              <Text style={styles.logoText}>L</Text>
-            </View>
-            <Text style={styles.appName}>LoyaltyApp</Text>
+            <NicheLogo size="large" showTagline={true} />
           </View>
 
           <View style={styles.header}>
@@ -522,25 +520,6 @@ const styles = StyleSheet.create({
   logoContainer: {
     alignItems: 'center',
     marginBottom: Spacing.xl,
-  },
-  logo: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  logoText: {
-    ...Typography.title3,
-    color: Colors.background,
-    fontWeight: '700',
-  },
-  appName: {
-    ...Typography.bodyBold,
-    color: Colors.text,
-    fontWeight: '600',
   },
   header: {
     alignItems: 'center',

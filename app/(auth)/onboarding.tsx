@@ -15,14 +15,13 @@ export default function OnboardingScreen() {
           <View style={styles.logo}>
             <Text style={styles.logoText}>L</Text>
           </View>
-          <Text style={styles.appName}>LoyaltyApp</Text>
+          <Text style={styles.appName}>niche.</Text>
         </View>
 
         <View style={styles.textContainer}>
-          <Text style={styles.title}>Welcome to LoyaltyApp</Text>
+          <Text style={styles.title}>Welcome to niche.</Text>
           <Text style={styles.description}>
-            Earn points on every purchase, unlock exclusive rewards, and never miss a great deal. 
-            Start your loyalty journey today!
+            Cannabis refined. Not for Everyone. Join the select few who recognize true quality and craftsmanship.
           </Text>
         </View>
       </View>

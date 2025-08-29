@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useAuth } from '../../contexts/AuthContext';
+import { NicheLogo } from '../../components/ui/NicheLogo';
 import { Colors, Typography, Spacing } from '../../constants/Colors';
 
 export default function SplashScreen() {
@@ -36,10 +37,7 @@ export default function SplashScreen() {
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.logoContainer, animatedStyle]}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>L</Text>
-        </View>
-        <Text style={styles.appName}>LoyaltyApp</Text>
+        <NicheLogo size="large" variant="white" showTagline={true} />
       </Animated.View>
     </View>
   );
@@ -48,30 +46,11 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primary, // This is now black per niche. branding
     justifyContent: 'center',
     alignItems: 'center',
   },
   logoContainer: {
     alignItems: 'center',
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
-  },
-  logoText: {
-    ...Typography.title1,
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-  appName: {
-    ...Typography.title2,
-    color: Colors.background,
-    fontWeight: '600',
   },
 });

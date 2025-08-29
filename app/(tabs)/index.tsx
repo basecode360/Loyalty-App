@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { ListItem } from '../../components/ui/ListItem';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { NicheLogo } from '../../components/ui/NicheLogo';
 import { Colors, Typography, Spacing } from '../../constants/Colors';
 import { PointsTransaction } from '../../types/api';
 import * as api from '../../services/api';
@@ -113,8 +114,13 @@ export default function HomeScreen() {
       >
         {/* Header Section */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>Welcome back!</Text>
-          <Text style={styles.userName}>{getUserDisplayName()}</Text>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.greeting}>Welcome back!</Text>
+              <Text style={styles.userName}>{getUserDisplayName()}</Text>
+            </View>
+            <NicheLogo size="small" />
+          </View>
         </View>
 
         {/* Points Balance Card */}
@@ -293,6 +299,11 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 20,
     backgroundColor: Colors.background,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   greeting: {
     ...Typography.body,
