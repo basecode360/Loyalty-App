@@ -78,7 +78,7 @@ export default function ManageDevicesScreen() {
           platform: `${Platform.OS} ${Device.osVersion}`,
           lastActive: new Date().toISOString(),
           isCurrentDevice: true,
-          location: 'Karachi, Pakistan',
+          location: 'Chicago, USA',
           status: 'active',
         },
         {
@@ -88,7 +88,7 @@ export default function ManageDevicesScreen() {
           platform: 'iOS 16.4',
           lastActive: new Date(Date.now() - 86400000).toISOString(),
           isCurrentDevice: false,
-          location: 'Lahore, Pakistan',
+          location: 'Lexington, USA',
           status: 'inactive',
         },
         {
@@ -98,7 +98,7 @@ export default function ManageDevicesScreen() {
           platform: 'macOS 13.3',
           lastActive: new Date(Date.now() - 172800000).toISOString(),
           isCurrentDevice: false,
-          location: 'Karachi, Pakistan',
+          location: 'California, USA',
           status: 'inactive',
         },
       ];

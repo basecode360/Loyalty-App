@@ -38,7 +38,7 @@ export default function SignUpScreen() {
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
-  const [country, setCountry] = useState('Pakistan');
+  const [country, setCountry] = useState('USA');
 
   // Password
   const [password, setPassword] = useState('');
@@ -61,11 +61,11 @@ export default function SignUpScreen() {
   };
 
   const validateZipCode = (zip) => {
-    // Pakistan postal codes: exactly 4 digits
-    const pakistanZipRegex = /^\d{4}$/;
-    
-    if (country === 'Pakistan') {
-      return pakistanZipRegex.test(zip);
+    // USA postal codes: exactly 4 digits
+    const usaZipRegex = /^\d{5}$/;
+
+    if (country === 'USA') {
+      return usaZipRegex.test(zip);
     }
     
     // For other countries, keep flexible validation
@@ -131,8 +131,8 @@ export default function SignUpScreen() {
     if (!city.trim()) errors.push('City is required');
     if (!state.trim()) errors.push('State/Province is required');
     if (!validateZipCode(zipCode)) {
-      if (country === 'Pakistan') {
-        errors.push('ZIP code must be exactly 4 digits for Pakistan');
+      if (country === 'USA') {
+        errors.push('ZIP code must be exactly 5 digits for USA');
       } else {
         errors.push(`Valid ZIP/Postal code is required for ${country}`);
       }
@@ -368,11 +368,11 @@ export default function SignUpScreen() {
                   value={zipCode}
                   onChangeText={setZipCode}
                   keyboardType="numeric"
-                  maxLength={country === 'Pakistan' ? 4 : undefined}
+                  maxLength={country === 'USA' ? 5 : undefined}
                 />
                 {zipCode && !validateZipCode(zipCode) && (
                   <Text style={styles.errorText}>
-                    {country === 'Pakistan' ? '4 digits required' : 'Invalid format'}
+                    {country === 'USA' ? '5 digits required' : 'Invalid format'}
                   </Text>
                 )}
               </View>

@@ -57,7 +57,7 @@ export default function ProfileInfoScreen() {
       setCity(userProfile.city || '');
       setState(userProfile.state || '');
       setZipCode(userProfile.zip_code || '');
-      setCountry(userProfile.country || 'Pakistan');
+      setCountry(userProfile.country || 'USA');
       setAgreeToMarketing(userProfile.agree_to_marketing || false);
       setProfilePictureUrl(userProfile.profile_picture_url || '');
       
@@ -373,7 +373,7 @@ export default function ProfileInfoScreen() {
                   value={zipCode}
                   onChangeText={setZipCode}
                   keyboardType="numeric"
-                  maxLength={country === 'Pakistan' ? 4 : undefined}
+                  maxLength={country === 'USA' ? 5 : undefined}
                 />
               </View>
 

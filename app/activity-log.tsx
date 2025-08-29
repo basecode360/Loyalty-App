@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
+import {
   ArrowLeft,
   LogIn,
   LogOut,
@@ -21,7 +21,7 @@ import {
   CreditCard,
   Filter,
   Calendar,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -31,7 +31,16 @@ import { Colors, Typography, Spacing } from '../constants/Colors';
 
 interface ActivityItem {
   id: string;
-  type: 'login' | 'logout' | 'signup' | 'profile_update' | 'password_change' | 'points_earned' | 'points_redeemed' | 'device_added' | 'security_event';
+  type:
+    | 'login'
+    | 'logout'
+    | 'signup'
+    | 'profile_update'
+    | 'password_change'
+    | 'points_earned'
+    | 'points_redeemed'
+    | 'device_added'
+    | 'security_event';
   description: string;
   timestamp: string;
   device?: string;
@@ -46,7 +55,9 @@ export default function ActivityLogScreen() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'security' | 'account' | 'points'>('all');
+  const [filter, setFilter] = useState<
+    'all' | 'security' | 'account' | 'points'
+  >('all');
 
   useEffect(() => {
     loadActivityLog();
@@ -62,7 +73,7 @@ export default function ActivityLogScreen() {
           description: 'Signed in to account',
           timestamp: new Date().toISOString(),
           device: 'iPhone 14 Pro',
-          location: 'Karachi, Pakistan',
+          location: 'Austin, USA',
           ipAddress: '192.168.1.100',
           riskLevel: 'low',
         },
@@ -72,7 +83,7 @@ export default function ActivityLogScreen() {
           description: 'Earned 50 points from receipt scan',
           timestamp: new Date(Date.now() - 3600000).toISOString(),
           device: 'iPhone 14 Pro',
-          location: 'Karachi, Pakistan',
+          location: 'Dallas, USA',
           riskLevel: 'low',
         },
         {
@@ -81,7 +92,7 @@ export default function ActivityLogScreen() {
           description: 'Updated personal information',
           timestamp: new Date(Date.now() - 7200000).toISOString(),
           device: 'iPhone 14 Pro',
-          location: 'Karachi, Pakistan',
+          location: 'San Diego, USA',
           riskLevel: 'low',
         },
         {
@@ -90,7 +101,7 @@ export default function ActivityLogScreen() {
           description: 'Password was changed',
           timestamp: new Date(Date.now() - 86400000).toISOString(),
           device: 'MacBook Pro',
-          location: 'Karachi, Pakistan',
+          location: 'Philadelphia, USA',
           ipAddress: '192.168.1.105',
           riskLevel: 'medium',
         },
@@ -100,7 +111,7 @@ export default function ActivityLogScreen() {
           description: 'Signed in from new device',
           timestamp: new Date(Date.now() - 172800000).toISOString(),
           device: 'Unknown Device',
-          location: 'Lahore, Pakistan',
+          location: 'Houston, USA',
           ipAddress: '203.124.45.67',
           riskLevel: 'high',
         },
@@ -110,7 +121,7 @@ export default function ActivityLogScreen() {
           description: 'Redeemed 100 points for gift card',
           timestamp: new Date(Date.now() - 259200000).toISOString(),
           device: 'iPhone 14 Pro',
-          location: 'Karachi, Pakistan',
+          location: 'Chicago, USA',
           riskLevel: 'low',
         },
         {
@@ -119,7 +130,7 @@ export default function ActivityLogScreen() {
           description: 'Account created successfully',
           timestamp: new Date(Date.now() - 604800000).toISOString(),
           device: 'iPhone 14 Pro',
-          location: 'Karachi, Pakistan',
+          location: 'Philadelphia, USA',
           ipAddress: '192.168.1.100',
           riskLevel: 'low',
         },
@@ -202,7 +213,7 @@ export default function ActivityLogScreen() {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    
+
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -213,15 +224,21 @@ export default function ActivityLogScreen() {
   const getFilteredActivities = () => {
     switch (filter) {
       case 'security':
-        return activities.filter(a => 
-          ['login', 'logout', 'password_change', 'device_added', 'security_event'].includes(a.type)
+        return activities.filter((a) =>
+          [
+            'login',
+            'logout',
+            'password_change',
+            'device_added',
+            'security_event',
+          ].includes(a.type)
         );
       case 'account':
-        return activities.filter(a => 
+        return activities.filter((a) =>
           ['signup', 'profile_update', 'password_change'].includes(a.type)
         );
       case 'points':
-        return activities.filter(a => 
+        return activities.filter((a) =>
           ['points_earned', 'points_redeemed'].includes(a.type)
         );
       default:
@@ -235,13 +252,13 @@ export default function ActivityLogScreen() {
     <Card style={styles.activityCard}>
       <View style={styles.activityHeader}>
         <View style={styles.activityInfo}>
-          <View style={styles.iconContainer}>
-            {getActivityIcon(item.type)}
-          </View>
+          <View style={styles.iconContainer}>{getActivityIcon(item.type)}</View>
           <View style={styles.activityDetails}>
             <Text style={styles.activityDescription}>{item.description}</Text>
             <View style={styles.activityMeta}>
-              <Text style={styles.activityTime}>{formatTimestamp(item.timestamp)}</Text>
+              <Text style={styles.activityTime}>
+                {formatTimestamp(item.timestamp)}
+              </Text>
               {item.device && (
                 <>
                   <Text style={styles.metaSeparator}>•</Text>
@@ -255,13 +272,19 @@ export default function ActivityLogScreen() {
           </View>
         </View>
         <View style={styles.activityStatus}>
-          <Badge 
-            text={getRiskLevelText(item.riskLevel)} 
-            variant={item.riskLevel === 'low' ? 'success' : item.riskLevel === 'medium' ? 'warning' : 'error'} 
+          <Badge
+            text={getRiskLevelText(item.riskLevel)}
+            variant={
+              item.riskLevel === 'low'
+                ? 'success'
+                : item.riskLevel === 'medium'
+                ? 'warning'
+                : 'error'
+            }
           />
         </View>
       </View>
-      
+
       {item.ipAddress && (
         <View style={styles.technicalDetails}>
           <Text style={styles.ipAddress}>IP: {item.ipAddress}</Text>
@@ -270,24 +293,32 @@ export default function ActivityLogScreen() {
     </Card>
   );
 
-  const renderFilterButton = (filterType: typeof filter, label: string, count: number) => (
+  const renderFilterButton = (
+    filterType: typeof filter,
+    label: string,
+    count: number
+  ) => (
     <TouchableOpacity
       style={[
         styles.filterButton,
-        filter === filterType && styles.filterButtonActive
+        filter === filterType && styles.filterButtonActive,
       ]}
       onPress={() => setFilter(filterType)}
     >
-      <Text style={[
-        styles.filterButtonText,
-        filter === filterType && styles.filterButtonTextActive
-      ]}>
+      <Text
+        style={[
+          styles.filterButtonText,
+          filter === filterType && styles.filterButtonTextActive,
+        ]}
+      >
         {label}
       </Text>
-      <Text style={[
-        styles.filterCount,
-        filter === filterType && styles.filterCountActive
-      ]}>
+      <Text
+        style={[
+          styles.filterCount,
+          filter === filterType && styles.filterCountActive,
+        ]}
+      >
         {count}
       </Text>
     </TouchableOpacity>
@@ -305,7 +336,7 @@ export default function ActivityLogScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -319,69 +350,102 @@ export default function ActivityLogScreen() {
             <Text style={styles.summaryTitle}>Security Summary</Text>
           </View>
           <Text style={styles.summaryDescription}>
-            Last {activities.length} activities. Monitor your account for suspicious activity.
+            Last {activities.length} activities. Monitor your account for
+            suspicious activity.
           </Text>
-          <ScrollView 
-            horizontal 
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.riskSummary}
           >
             <View style={styles.riskItem}>
-              <View style={[styles.riskIndicator, { backgroundColor: Colors.error }]} />
+              <View
+                style={[
+                  styles.riskIndicator,
+                  { backgroundColor: Colors.error },
+                ]}
+              />
               <Text style={styles.riskText}>
-                {activities.filter(a => a.riskLevel === 'high').length} High Risk
+                {activities.filter((a) => a.riskLevel === 'high').length} High
+                Risk
               </Text>
             </View>
             <View style={styles.riskItem}>
-              <View style={[styles.riskIndicator, { backgroundColor: Colors.warning }]} />
+              <View
+                style={[
+                  styles.riskIndicator,
+                  { backgroundColor: Colors.warning },
+                ]}
+              />
               <Text style={styles.riskText}>
-                {activities.filter(a => a.riskLevel === 'medium').length} Medium Risk
+                {activities.filter((a) => a.riskLevel === 'medium').length}{' '}
+                Medium Risk
               </Text>
             </View>
             <View style={styles.riskItem}>
-              <View style={[styles.riskIndicator, { backgroundColor: Colors.accent }]} />
+              <View
+                style={[
+                  styles.riskIndicator,
+                  { backgroundColor: Colors.accent },
+                ]}
+              />
               <Text style={styles.riskText}>
-                {activities.filter(a => a.riskLevel === 'low').length} Normal
+                {activities.filter((a) => a.riskLevel === 'low').length} Normal
               </Text>
             </View>
           </ScrollView>
         </Card>
 
         {/* Filter Buttons */}
-        <ScrollView 
-          horizontal 
+        <ScrollView
+          horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterContainer}
         >
           {renderFilterButton('all', 'All', activities.length)}
-          {renderFilterButton('security', 'Security', activities.filter(a => 
-            ['login', 'logout', 'password_change', 'device_added', 'security_event'].includes(a.type)
-          ).length)}
-          {renderFilterButton('account', 'Account', activities.filter(a => 
-            ['signup', 'profile_update', 'password_change'].includes(a.type)
-          ).length)}
-          {renderFilterButton('points', 'Points', activities.filter(a => 
-            ['points_earned', 'points_redeemed'].includes(a.type)
-          ).length)}
+          {renderFilterButton(
+            'security',
+            'Security',
+            activities.filter((a) =>
+              [
+                'login',
+                'logout',
+                'password_change',
+                'device_added',
+                'security_event',
+              ].includes(a.type)
+            ).length
+          )}
+          {renderFilterButton(
+            'account',
+            'Account',
+            activities.filter((a) =>
+              ['signup', 'profile_update', 'password_change'].includes(a.type)
+            ).length
+          )}
+          {renderFilterButton(
+            'points',
+            'Points',
+            activities.filter((a) =>
+              ['points_earned', 'points_redeemed'].includes(a.type)
+            ).length
+          )}
         </ScrollView>
 
         {/* Activities List */}
         <View style={styles.listWrapper}>
           {filteredActivities.length > 0 ? (
             filteredActivities.map((item) => (
-              <View key={item.id}>
-                {renderActivityItem({ item })}
-              </View>
+              <View key={item.id}>{renderActivityItem({ item })}</View>
             ))
           ) : (
             <View style={styles.emptyState}>
               <Calendar size={64} color={Colors.textLight} />
               <Text style={styles.emptyTitle}>No Activities Found</Text>
               <Text style={styles.emptyDescription}>
-                {filter === 'all' 
-                  ? 'Your activity log will appear here.' 
-                  : `No ${filter} activities yet.`
-                }
+                {filter === 'all'
+                  ? 'Your activity log will appear here.'
+                  : `No ${filter} activities yet.`}
               </Text>
             </View>
           )}

@@ -180,7 +180,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           email: user?.email || '',
           first_name: 'User',
           last_name: '',
-          country: 'Pakistan',
+          country: 'USA',
           agree_to_marketing: false,
           email_verified: true,
           phone_verified: false,
