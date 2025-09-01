@@ -41,6 +41,7 @@
     "expo-system-ui": "~5.0.5",
     "expo-web-browser": "~14.2.0",
     "lucide-react-native": "^0.475.0",
+    "nodemailer": "^7.0.6",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
@@ -57,7 +58,9 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@types/nodemailer": "^7.0.1",
     "@types/react": "~19.0.10",
+    "supabase": "^2.39.2",
     "typescript": "~5.8.3"
   }
 }

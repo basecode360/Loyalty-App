@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
+import { invokeSendEmail } from '@/services/sendEmail';
+import { emailTemplates } from '@/utils/email.template';
 
 interface UserData {
   firstName: string;
@@ -106,8 +108,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Setup auth listener separately
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event);
-
+        const { data: { session: iSession } } = await supabase.auth.getSession();
+        console.log("access", iSession?.access_token);
         // Only handle specific events
         if (event === 'SIGNED_IN') {
           setSession(session);
@@ -212,7 +214,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       console.log('Attempting sign in for email:', email);
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error }: any = await supabase.auth.signInWithPassword({
         email: email,
         password: password
       });
@@ -242,6 +244,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (data.user) {
         console.log('✅ User signed in successfully:', data.user.email);
+        const emailTemplate = emailTemplates["loginGreetEmail"];
+        console.log("data", data)
+        const mail = emailTemplate(data.user.user_metadata.first_name + " " + data.user.user_metadata.last_name);
+        const mailerReponse = await invokeSendEmail({ to: email, subject: mail.subject, html: mail.mail });
+        console.log('Email send response:', mailerReponse);
         setUser(data.user);
         setSession(data.session);
         await getUserProfile(data.user.id);
@@ -307,6 +314,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('OTP CODE:', developmentOTP);
       console.log('Valid OTPs: 1234, 0000, or any 4-digit number');
       console.log('==============================================');
+      const emailTemplate = emailTemplates["registerVerificationEmail"];
+      const mail = emailTemplate(userData.firstName, developmentOTP);
+      const mailerReponse = await invokeSendEmail({ to: email, subject: mail.subject, html: mail.mail });
+      console.log('Email send response:', mailerReponse);
 
       if (otpError) {
         console.error('OTP sending error:', otpError);

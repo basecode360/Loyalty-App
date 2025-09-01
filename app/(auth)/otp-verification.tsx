@@ -14,15 +14,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
+import { emailTemplates } from '@/utils/email.template';
+import { invokeSendEmail } from '@/services/sendEmail';
 
 export default function OTPVerificationScreen() {
   const router = useRouter();
   const { verifyOtp, signUpWithEmail, sendPasswordResetOtp } = useAuth();
-  const { method, contact, type, userData } = useLocalSearchParams();
-  
+  const { method, contact, type, userData }: any = useLocalSearchParams();
+
   const otpLength = 4; // 4-digit OTP for all flows
   const initialOtp = new Array(otpLength).fill('');
-  
+
   const [otp, setOtp] = useState(initialOtp);
   const [isLoading, setIsLoading] = useState(false);
   const [timer, setTimer] = useState(60);
@@ -71,7 +73,7 @@ export default function OTPVerificationScreen() {
 
       // Call the verify OTP function from auth context
       const result = await verifyOtp(String(contact), otpString, String(type));
-      
+
       if (result.success) {
         // Navigate based on type
         if (type === 'forgot-password') {
@@ -82,8 +84,13 @@ export default function OTPVerificationScreen() {
         } else if (type === 'signup') {
           // Complete the signup process
           if (userData) {
+            console.log("User Data:", userData);
             const parsedUserData = JSON.parse(String(userData));
             // Account created successfully during OTP verification
+            const emailTemplate = emailTemplates["greetEmail"];
+            const mail = emailTemplate(userData?.firstName);
+            const mailerReponse = await invokeSendEmail({ to: contact, subject: mail.subject, html: mail.mail });
+            console.log('Email send response:', mailerReponse);
             router.replace('/(tabs)');
           } else {
             router.replace('/(tabs)');
@@ -97,13 +104,15 @@ export default function OTPVerificationScreen() {
     } catch (error) {
       console.error('OTP verification error:', error);
       Alert.alert(
-        'Verification Failed', 
+        'Verification Failed',
         error.message || 'Invalid OTP. Please try again.',
         [
-          { text: 'OK', onPress: () => {
-            setOtp(initialOtp);
-            inputRefs.current[0]?.focus();
-          }}
+          {
+            text: 'OK', onPress: () => {
+              setOtp(initialOtp);
+              inputRefs.current[0]?.focus();
+            }
+          }
         ]
       );
     } finally {
@@ -116,7 +125,7 @@ export default function OTPVerificationScreen() {
       setTimer(60);
       setOtp(initialOtp);
       inputRefs.current[0]?.focus();
-      
+
       if (type === 'forgot-password') {
         await sendPasswordResetOtp(String(contact));
         Alert.alert('Success', 'Reset code sent to your email');
@@ -125,7 +134,7 @@ export default function OTPVerificationScreen() {
         await signUpWithEmail(String(contact), userData ? JSON.parse(String(userData)) : {});
         Alert.alert('Success', 'Verification code sent to your email');
       }
-      
+
       console.log('OTP resent successfully');
     } catch (error) {
       console.error('Resend OTP error:', error);
