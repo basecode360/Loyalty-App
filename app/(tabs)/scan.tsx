@@ -18,6 +18,7 @@ import { Card } from '../../components/ui/Card';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { Colors, Typography, Spacing } from '../../constants/Colors';
 import * as api from '../../services/api';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -63,10 +64,11 @@ export default function ScanScreen() {
     if (cameraRef.current) {
       try {
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.8,
-          base64: true,
+          quality: 0.3,
+          base64: false,
+          skipProcessing: true,
         });
-        
+
         if (photo?.uri) {
           setCapturedImage(photo.uri);
           setShowConfirmation(true);
@@ -83,12 +85,23 @@ export default function ScanScreen() {
 
     setIsUploading(true);
     try {
-      const receipt = await api.submitReceipt(capturedImage);
-      
-      // Show success message
+      console.log('Compressing image...');
+
+      // Compress image first
+      const manipulatedImage = await ImageManipulator.manipulateAsync(
+        capturedImage,
+        [{ resize: { width: 800 } }], // Resize to max 800px width
+        { compress: 0.3, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      console.log('Compressed image URI:', manipulatedImage.uri);
+
+      // Now submit compressed image
+      const receipt = await api.submitReceipt(manipulatedImage.uri);
+
       Alert.alert(
         'Receipt Submitted!',
-        'Your receipt has been submitted for processing. You\'ll receive points once it\'s approved.',
+        `Receipt has been submitted successfully!\n\nStatus: ${receipt.status}`,
         [
           {
             text: 'View Receipts',
@@ -104,9 +117,9 @@ export default function ScanScreen() {
           },
         ]
       );
-    } catch (error) {
-      console.error('Error uploading receipt:', error);
-      Alert.alert('Error', 'Failed to upload receipt. Please try again.');
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      Alert.alert('Upload Error', error.message || 'Upload failed');
     } finally {
       setIsUploading(false);
     }
@@ -133,52 +146,51 @@ export default function ScanScreen() {
 
       {/* Camera Section */}
       <View style={styles.cameraContainer}>
-        <CameraView 
-          style={styles.camera} 
+        <CameraView
+          style={styles.camera}
           facing={facing}
           ref={cameraRef}
-        >
-          {/* Overlay with Frame */}
-          <View style={styles.overlay}>
-            <View style={styles.frameOverlay}>
-              <View style={styles.frameBackground} />
-              <View style={[styles.corner, styles.topLeft]} />
-              <View style={[styles.corner, styles.topRight]} />
-              <View style={[styles.corner, styles.bottomLeft]} />
-              <View style={[styles.corner, styles.bottomRight]} />
-              
-              {/* Frame guide text */}
-              <View style={styles.frameGuide}>
-                <Text style={styles.frameGuideText}>
-                  Align receipt within frame
-                </Text>
-              </View>
+        />
+
+        {/* Overlay - Outside CameraView */}
+        <View style={styles.overlay}>
+          <View style={styles.frameOverlay}>
+            <View style={styles.frameBackground} />
+            <View style={[styles.corner, styles.topLeft]} />
+            <View style={[styles.corner, styles.topRight]} />
+            <View style={[styles.corner, styles.bottomLeft]} />
+            <View style={[styles.corner, styles.bottomRight]} />
+
+            <View style={styles.frameGuide}>
+              <Text style={styles.frameGuideText}>
+                Align receipt within frame
+              </Text>
             </View>
           </View>
+        </View>
 
-          {/* Camera Controls */}
-          <View style={styles.controls}>
-            <TouchableOpacity 
-              style={styles.controlButton}
-              onPress={toggleCameraFacing}
-              activeOpacity={0.7}
-            >
-              <FlipHorizontal size={24} color={Colors.background} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.captureButton}
-              onPress={takePicture}
-              activeOpacity={0.8}
-            >
-              <View style={styles.captureButtonInner}>
-                <Camera size={32} color={Colors.background} />
-              </View>
-            </TouchableOpacity>
-            
-            <View style={styles.controlButton} />
-          </View>
-        </CameraView>
+        {/* Camera Controls - Also outside */}
+        <View style={styles.controls}>
+          <TouchableOpacity
+            style={styles.controlButton}
+            onPress={toggleCameraFacing}
+            activeOpacity={0.7}
+          >
+            <FlipHorizontal size={24} color={Colors.background} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.captureButton}
+            onPress={takePicture}
+            activeOpacity={0.8}
+          >
+            <View style={styles.captureButtonInner}>
+              <Camera size={32} color={Colors.background} />
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.controlButton} />
+        </View>
       </View>
 
       {/* Instructions Card */}
@@ -188,7 +200,7 @@ export default function ScanScreen() {
             <Check size={20} color={Colors.accent} />
             <Text style={styles.instructionsTitle}>Tips for Best Results</Text>
           </View>
-          
+
           <View style={styles.instructionsList}>
             <View style={styles.instructionItem}>
               <Text style={styles.instructionBullet}>•</Text>
@@ -219,7 +231,7 @@ export default function ScanScreen() {
         <SafeAreaView style={styles.modalContainer}>
           {/* Modal Header */}
           <View style={styles.modalHeader}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.modalHeaderButton}
               onPress={retakePhoto}
               activeOpacity={0.7}
@@ -237,7 +249,7 @@ export default function ScanScreen() {
                 <Image source={{ uri: capturedImage }} style={styles.capturedImage} />
               )}
             </View>
-            
+
             <Text style={styles.imageHelperText}>
               Make sure the receipt is clear and all details are visible
             </Text>
@@ -278,7 +290,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
   },
-  
+
   // Header Styles
   header: {
     paddingHorizontal: 20,
@@ -302,7 +314,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 20,
   },
-  
+
   // Permission Styles
   permissionIconContainer: {
     width: 120,
@@ -334,7 +346,7 @@ const styles = StyleSheet.create({
     minWidth: 200,
     paddingVertical: 16,
   },
-  
+
   // Camera Styles
   cameraContainer: {
     flex: 1,
@@ -417,7 +429,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
   },
-  
+
   // Controls
   controls: {
     position: 'absolute',
@@ -458,7 +470,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
+
   // Instructions
   instructionsSection: {
     paddingHorizontal: 20,
@@ -501,7 +513,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     flex: 1,
   },
-  
+
   // Modal Styles
   modalContainer: {
     flex: 1,
@@ -530,7 +542,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 20,
   },
-  
+
   // Image Preview
   imageContainer: {
     flex: 1,
@@ -564,7 +576,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingHorizontal: 20,
   },
-  
+
   // Modal Actions
   modalActions: {
     flexDirection: 'row',
