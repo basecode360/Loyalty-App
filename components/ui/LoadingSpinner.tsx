@@ -1,3 +1,4 @@
+// components/ui/LoadingSpinner.tsx
 import React, { useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, {

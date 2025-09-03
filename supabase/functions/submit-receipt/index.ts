@@ -1,4 +1,4 @@
-// functions/submit-receipt/index.ts
+// supabase/functions/submit-receipt/index.ts
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 

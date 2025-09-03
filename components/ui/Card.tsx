@@ -1,3 +1,4 @@
+// components/ui/Card.tsx
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Colors, BorderRadius, Spacing } from '../../constants/Colors';

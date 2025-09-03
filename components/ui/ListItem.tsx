@@ -1,3 +1,4 @@
+// components/ui/ListItem.tsx
 import React from 'react';
 import { 
   View, 

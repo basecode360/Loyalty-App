@@ -1,3 +1,4 @@
+// app/(auth)/otp-verification.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,

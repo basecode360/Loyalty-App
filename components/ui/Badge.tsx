@@ -1,3 +1,4 @@
+// components/ui/Badge.tsx
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { Colors, BorderRadius, Spacing, Typography } from '../../constants/Colors';

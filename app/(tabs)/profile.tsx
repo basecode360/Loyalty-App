@@ -1,3 +1,4 @@
+// app/(tabs)/profile.tsx
 import React from 'react';
 import {
   View,

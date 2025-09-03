@@ -1,3 +1,4 @@
+// constants/Colors.ts
 export const Colors = {
   // niche. brand colors from brand guide
   primary: '#000000', // Black - primary brand color

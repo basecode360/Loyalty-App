@@ -1,3 +1,4 @@
+// app/(auth)/forgot-password.tsx
 import React, { useState } from 'react';
 import {
   View,

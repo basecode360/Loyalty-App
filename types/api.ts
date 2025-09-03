@@ -1,3 +1,4 @@
+// types/api.ts
 export interface Receipt {
   id: string;
   retailer: string;

@@ -1,3 +1,4 @@
+// app/(auth)/splash.tsx
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';

@@ -1,3 +1,4 @@
+// components/ui/NicheLogo.tsx
 import React from 'react';
 import { View, StyleSheet, Text, Image } from 'react-native';
 import { Colors, Typography } from '../../constants/Colors';

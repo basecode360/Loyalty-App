@@ -1,3 +1,4 @@
+// services/sendEmail.ts
 import { supabase } from "@/lib/supabase";
 
 type SendEmailInput = {

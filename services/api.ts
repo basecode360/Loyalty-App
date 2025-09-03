@@ -1,3 +1,4 @@
+// services/api.ts
 import { supabase } from '../lib/supabase';
 import { Receipt, PointsTransaction, Promotion, Notification, Device, ActivityLog } from '../types/api';
 

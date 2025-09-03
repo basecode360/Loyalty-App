@@ -1,3 +1,4 @@
+// utils/email.template.ts
 const emailTemplates = {
   registerVerificationEmail: (username: string, code: string) => {
     return {

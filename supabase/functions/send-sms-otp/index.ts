@@ -1,4 +1,4 @@
-// functions/send-sms-otp/index.ts
+// supabase/functions/send-sms-otp/index.ts
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 

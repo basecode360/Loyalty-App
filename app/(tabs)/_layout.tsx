@@ -1,3 +1,4 @@
+// app/(tabs)/_layout.tsx
 import { Tabs } from 'expo-router';
 import { Chrome as Home, Scan, Receipt, Tag, User } from 'lucide-react-native';
 import { Colors } from '../../constants/Colors';
