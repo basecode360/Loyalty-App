@@ -1,220 +1,329 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const geminiApiKey = Deno.env.get('GEMINI_API_KEY')!
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+};
 
-// Gemini OCR function
-async function processWithGemini(imageUrl: string): Promise<any> {
+// Helper: Normalize retailer name for fingerprint
+const normalizeRetailer = (name: string): string => {
+  if (!name) return 'unknown';
+  return name
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '') // Remove special chars
+    .replace(/\s+/g, '') // Remove spaces
+    .replace(/(express|store|mart|center|super|branch)/g, '');
+};
+
+// Helper: Create text fingerprint
+const createTextFingerprint = (retailer: string, date: string, totalCents: number): string => {
+  const normalizedRetailer = normalizeRetailer(retailer);
+  const formattedDate = date.split('T')[0]; // YYYY-MM-DD format
+  return `${normalizedRetailer}|${formattedDate}|${totalCents}`;
+};
+
+// Helper: Simple image hash (using basic string hash)
+const createImageHash = (imagePath: string): string => {
+  // Simple hash based on image path and timestamp
+  const timestamp = Date.now();
+  return `img_${imagePath.split('/').pop()}_${timestamp}`.substring(0, 16);
+};
+
+// Process with Gemini Vision API
+const processWithGemini = async (imageUrl: string): Promise<any> => {
+  console.log('Starting Gemini OCR processing...');
+  
+  const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY not configured');
+  }
+
   try {
-    // Download image and convert to base64
-    const imageResponse = await fetch(imageUrl)
-    const imageBuffer = await imageResponse.arrayBuffer()
-    const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)))
+    // Get image as base64
+    const imageResponse = await fetch(imageUrl);
+    const imageBlob = await imageResponse.blob();
+    const arrayBuffer = await imageBlob.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+    // Gemini API prompt
+    const prompt = `Analyze this receipt image and extract the following information in JSON format:
+    {
+      "retailer": "store/restaurant name",
+      "date": "YYYY-MM-DD format",
+      "total": "total amount as number (no currency symbol)",
+      "currency": "PKR or USD",
+      "invoice_number": "invoice/receipt number if visible",
+      "payment_method": "cash/card/other",
+      "items": [{"name": "item name", "price": number}],
+      "confidence": "0.0 to 1.0 confidence score"
+    }
+    
+    Rules:
+    - Return ONLY valid JSON, no explanations
+    - Use USD as default currency if not clear
+    - Set confidence based on clarity (1.0 = very clear, 0.5 = readable, 0.1 = poor quality)
+    - If date is unclear, use today's date
+    - Total must be a number only (no commas or symbols)`;
 
     // Call Gemini API
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`
-
-    const prompt = `
-      Analyze this Pakistani receipt and extract data in JSON format.
-      
-      Common Pakistani retailers:
-      - Petrol: PSO, Shell, Total, HBL stations
-      - Supermarkets: Imtiaz, Carrefour, Metro
-      - Restaurants: KFC, McDonald's, local
-      
-      Return ONLY valid JSON:
+    const geminiResponse = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_API_KEY,
       {
-        "retailer": "store name",
-        "retailer_type": "fuel/grocery/restaurant/pharmacy/other",
-        "purchase_date": "YYYY-MM-DD",
-        "total_amount": number (no currency),
-        "currency": "PKR",
-        "invoice_number": "if visible",
-        "payment_method": "cash/card/jazzcash/easypaisa",
-        "card_last_digits": "if card payment",
-        "confidence": 0-100,
-        "items": [{"name": "item", "price": 0}]
-      }
-    `
-
-    const response = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            {
-              inline_data: {
-                mime_type: "image/jpeg",
-                data: base64Image
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: 'image/jpeg',
+                  data: base64
+                }
               }
-            }
-          ]
-        }]
-      })
-    })
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 1024,
+          }
+        })
+      }
+    );
 
-    const result = await response.json()
-    const textResponse = result.candidates[0].content.parts[0].text
+    if (!geminiResponse.ok) {
+      console.error('Gemini API error:', await geminiResponse.text());
+      throw new Error('Gemini API failed');
+    }
 
+    const geminiData = await geminiResponse.json();
+    console.log('Gemini response:', JSON.stringify(geminiData));
+
+    // Extract JSON from response
+    const textContent = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
     // Clean and parse JSON
-    const jsonStr = textResponse.replace(/```json|```/g, '').trim()
-    return JSON.parse(jsonStr)
+    const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No JSON found in Gemini response');
+    }
+
+    const ocrData = JSON.parse(jsonMatch[0]);
+    console.log('Extracted OCR data:', ocrData);
+
+    return ocrData;
 
   } catch (error) {
-    console.error('Gemini OCR error:', error)
-    throw new Error('OCR processing failed')
+    console.error('Gemini processing error:', error);
+    // Return fallback data if OCR fails
+    return {
+      retailer: 'Unknown Store',
+      date: new Date().toISOString().split('T')[0],
+      total: '0',
+      currency: 'PKR',
+      confidence: 0.1,
+      error: error.message
+    };
   }
-}
+};
 
-// Generate fingerprint for duplicate detection
-function generateFingerprint(retailer: string, date: string, totalCents: number, invoice?: string): string {
-  const normalized = retailer.toLowerCase().replace(/[^a-z0-9]/g, '')
-  if (invoice) {
-    return `${normalized}|${date}|${totalCents}|${invoice}`
-  }
-  return `${normalized}|${date}|${totalCents}`
-}
-
-export default async (req: Request): Promise<Response> => {
+// Main function
+Deno.serve(async (req) => {
+  // Handle CORS
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
   try {
-    const { image_path } = await req.json()
+    const { image_path } = await req.json();
+    console.log('Processing receipt:', image_path);
 
-    // Get auth token and user
-    const authHeader = req.headers.get('Authorization')!
-    const token = authHeader.replace('Bearer ', '')
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
-
+    // Get user from auth header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('No authorization header');
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+    
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     if (userError || !user) {
-      throw new Error('Authentication required')
+      throw new Error('Unauthorized: ' + userError?.message);
     }
 
-    console.log(`Processing receipt for user: ${user.id}`)
+    console.log('User authenticated:', user.id);
 
-    // Get signed URL for image
-    const { data: urlData, error: urlError } = await supabase.storage
+    // Get signed URL for the image
+    const { data: signedUrlData, error: urlError } = await supabase.storage
       .from('receipts-original')
-      .createSignedUrl(image_path, 300) // 5 min expiry
+      .createSignedUrl(image_path, 60); // 60 seconds expiry
 
-    if (urlError) throw new Error('Failed to get image URL')
+    if (urlError || !signedUrlData) {
+      throw new Error('Could not get image URL: ' + urlError?.message);
+    }
+
+    console.log('Got signed URL for image');
 
     // Process with Gemini
-    console.log('🤖 Processing with Gemini AI...')
-    const ocrResult = await processWithGemini(urlData.signedUrl)
+    const ocrData = await processWithGemini(signedUrlData.signedUrl);
 
-    // Convert to cents for Pakistani Rupees
-    const totalCents = Math.round((ocrResult.total_amount || 0) * 100)
+    // Parse and validate OCR data
+    const retailer = ocrData.retailer || 'Unknown Store';
+    const purchaseDate = ocrData.date || new Date().toISOString().split('T')[0];
+    const totalAmount = parseFloat(ocrData.total || '0');
+    const totalCents = Math.round(totalAmount * 100);
+    const confidence = ocrData.confidence || 0.5;
+    const currency = ocrData.currency || 'PKR';
+    const invoiceNumber = ocrData.invoice_number || `INV-${Date.now().toString().slice(-8)}`;
 
-    // Generate fingerprint
-    const fingerprint = generateFingerprint(
-      ocrResult.retailer || 'Unknown',
-      ocrResult.purchase_date || new Date().toISOString().split('T')[0],
-      totalCents,
-      ocrResult.invoice_number
-    )
+    // Create text fingerprint
+    const textFingerprint = createTextFingerprint(retailer, purchaseDate, totalCents);
+    
+    // Create image hash
+    const imageHash = createImageHash(image_path);
+
+    // Check for duplicate using text fingerprint
+    const { data: duplicateCheck, error: dupError } = await supabase
+      .from('receipts')
+      .select('id')
+      .eq('hash_text', textFingerprint)
+      .single();
+
+    if (duplicateCheck) {
+      console.log('Duplicate receipt detected');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          status: 'duplicate',
+          message: 'This receipt has already been submitted',
+          receipt_id: duplicateCheck.id
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
+      );
+    }
 
     // Determine status based on confidence
-    const confidence = (ocrResult.confidence || 50) / 100
-    let status = 'queued'
-
+    let status = 'queued';
     if (confidence >= 0.8) {
-      status = 'approved'
+      status = 'approved';
     } else if (confidence < 0.3) {
-      status = 'rejected'
+      status = 'rejected';
     }
 
-    // Special handling for known retailers
-    if (ocrResult.retailer_type === 'fuel' && confidence >= 0.6) {
-      status = 'approved' // Auto-approve fuel receipts with decent confidence
-    }
+    // Save receipt to database
+    const receiptData = {
+      user_id: user.id,
+      image_key: image_path,
+      retailer: retailer,
+      purchase_date: purchaseDate,
+      total_cents: totalCents,
+      status: status,
+      confidence: confidence,
+      invoice_number: invoiceNumber,
+      currency: currency,
+      payment_method: ocrData.payment_method || 'unknown',
+      hash_text: textFingerprint,
+      hash_img: imageHash,
+      ocr_json: ocrData
+    };
 
-    // Insert receipt record
-    const { data: receipt, error: insertError } = await supabase
+    console.log('Saving receipt:', receiptData);
+
+    const { data: receipt, error: dbError } = await supabase
       .from('receipts')
-      .insert({
-        user_id: user.id,
-        image_key: image_path,
-        ocr_json: ocrResult,
-        ocr_provider: 'gemini',
-        retailer: ocrResult.retailer || 'Unknown',
-        retailer_type: ocrResult.retailer_type || 'other',
-        purchase_date: ocrResult.purchase_date || new Date().toISOString().split('T')[0],
-        total_cents: totalCents,
-        currency: ocrResult.currency || 'PKR',
-        invoice_number: ocrResult.invoice_number,
-        payment_method: ocrResult.payment_method,
-        card_last_four: ocrResult.card_last_digits,
-        hash_text: fingerprint,
-        confidence: confidence,
-        status: status
-      })
+      .insert(receiptData)
       .select()
-      .single()
+      .single();
 
-    if (insertError) {
-      // Check for duplicate
-      if (insertError.code === '23505') {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            status: 'duplicate',
-            message: 'Ye receipt pehle submit ho chuki hai'
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-      throw new Error('Failed to save receipt: ' + insertError.message)
+    if (dbError) {
+      console.error('DB Error:', dbError);
+      throw new Error('Database error: ' + dbError.message);
     }
+
+    console.log('Receipt saved:', receipt.id);
 
     // Award points if approved
-    let pointsAwarded = 0
-    if (status === 'approved') {
-      await supabase.rpc('award_points_for_receipt', { receipt_id: receipt.id })
-      pointsAwarded = Math.floor(totalCents / 100) // 1 point per 100 PKR
+    let pointsAwarded = 0;
+    if (status === 'approved' && totalCents > 0) {
+      // Calculate points (1 point per 100 cents = 1 PKR)
+      pointsAwarded = Math.floor(totalCents / 100);
 
-      // Bonus for fuel receipts
-      if (ocrResult.retailer_type === 'fuel') {
-        pointsAwarded = Math.floor(pointsAwarded * 1.5) // 50% bonus on fuel
+      // Get current balance
+      const { data: balanceData } = await supabase
+        .from('points_ledger')
+        .select('balance_after')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      const currentBalance = balanceData?.balance_after || 0;
+
+      // Add points to ledger
+      const { error: pointsError } = await supabase
+        .from('points_ledger')
+        .insert({
+          user_id: user.id,
+          receipt_id: receipt.id,
+          delta: pointsAwarded,
+          reason: `Receipt - ${retailer}`,
+          balance_after: currentBalance + pointsAwarded
+        });
+
+      if (pointsError) {
+        console.error('Points error:', pointsError);
+      } else {
+        console.log('Points awarded:', pointsAwarded);
       }
     }
 
+    // Return success response
+    const responseData = {
+      success: true,
+      receipt_id: receipt.id,
+      status: status,
+      points_awarded: pointsAwarded,
+      retailer: retailer,
+      total: totalAmount,
+      currency: currency,
+      confidence: confidence,
+      message: status === 'approved' 
+        ? `Receipt approved! You earned ${pointsAwarded} points`
+        : status === 'queued'
+        ? 'Receipt submitted for review (will be processed within 24 hours)'
+        : 'Receipt quality too low, please try again with a clearer image'
+    };
+
+    console.log('Returning response:', responseData);
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        receipt_id: receipt.id,
-        status: status,
-        points_awarded: pointsAwarded,
-        retailer: ocrResult.retailer,
-        total: totalCents / 100,
-        message: status === 'approved'
-          ? `Receipt approved! ${pointsAwarded} points mile hain`
-          : status === 'queued'
-            ? 'Receipt review ke liye queue mein hai'
-            : 'Receipt process nahi ho saki'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      JSON.stringify(responseData),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
 
   } catch (error: any) {
-    console.error('❌ Submit receipt error:', error)
+    console.error('Error:', error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message || 'An error occurred',
+        status: 'error'
       }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200  // Return 200 even for errors to avoid CORS issues
       }
-    )
+    );
   }
-}
+});

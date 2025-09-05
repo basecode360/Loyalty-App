@@ -1,5 +1,5 @@
 // app/(tabs)/index.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Scan, Tag, TrendingUp } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
@@ -22,25 +22,53 @@ import * as api from '../../services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, refreshProfile } = useAuth();
   const [recentActivity, setRecentActivity] = useState<PointsTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState(0);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  // Load data function
+  const loadData = useCallback(async () => {
     try {
+      // Get latest transactions
       const transactions = await api.getPointsLedger();
-      setRecentActivity(transactions.slice(0, 5)); // Show last 5 transactions
+      setRecentActivity(transactions.slice(0, 2)); // Show only last 2 transactions
+      
+      // Get current balance
+      const balance = await api.getCurrentPointsBalance();
+      setCurrentBalance(balance);
+      
+      // Refresh profile to get latest data
+      if (refreshProfile) {
+        await refreshProfile();
+      }
     } catch (error) {
       console.error('Error loading home data:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [refreshProfile]);
+
+  // Initial load
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Refresh when screen comes into focus (important for after scanning receipt)
+  useFocusEffect(
+    useCallback(() => {
+      // Don't show loading spinner on focus refresh
+      loadData();
+      
+      // Optional: Set up polling for real-time updates
+      const interval = setInterval(() => {
+        loadData();
+      }, 30000); // Refresh every 30 seconds
+
+      return () => clearInterval(interval);
+    }, [loadData])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -50,6 +78,17 @@ export default function HomeScreen() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -88,9 +127,9 @@ export default function HomeScreen() {
     return 'User';
   };
 
-  // Get user's points balance
+  // Get user's points balance - use state for real-time updates
   const getPointsBalance = () => {
-    return userProfile?.loyalty_points || 0;
+    return currentBalance || userProfile?.loyalty_points || 0;
   };
 
   if (isLoading) {
@@ -110,7 +149,12 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
         }
       >
         {/* Header Section */}
@@ -124,7 +168,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Points Balance Card */}
+        {/* Points Balance Card - Animated on update */}
         <View style={styles.cardContainer}>
           <Card style={styles.balanceCard}>
             <View style={styles.balanceContent}>
@@ -260,7 +304,7 @@ export default function HomeScreen() {
               
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>
-                  {userProfile?.country || 'Not Set'}
+                  {userProfile?.country || 'USA'}
                 </Text>
                 <Text style={styles.statLabel}>Location</Text>
               </View>

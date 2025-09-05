@@ -1,5 +1,5 @@
 // app/(tabs)/scan.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Camera, Upload, X, Check, RotateCcw, FlipHorizontal } from 'lucide-react-native';
 import { Button } from '../../components/ui/Button';
@@ -27,7 +27,30 @@ export default function ScanScreen() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const cameraRef = useRef<CameraView>(null);
+
+  // Reset camera state when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Reset states when screen is focused
+      setCameraReady(false);
+      setShowConfirmation(false);
+      setCapturedImage(null);
+      setIsUploading(false);
+      
+      // Small delay to ensure camera is ready
+      const timer = setTimeout(() => {
+        setCameraReady(true);
+      }, 100);
+
+      return () => {
+        clearTimeout(timer);
+        // Clean up when leaving screen
+        setCameraReady(false);
+      };
+    }, [])
+  );
 
   if (!permission) {
     return (
@@ -61,20 +84,58 @@ export default function ScanScreen() {
   }
 
   const takePicture = async () => {
-    if (cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.3,
-          base64: false,
-          skipProcessing: true,
-        });
+    // Check if camera is ready
+    if (!cameraReady) {
+      console.log('Camera not ready yet');
+      Alert.alert('Please Wait', 'Camera is initializing...');
+      return;
+    }
 
-        if (photo?.uri) {
-          setCapturedImage(photo.uri);
-          setShowConfirmation(true);
-        }
-      } catch (error) {
-        console.error('Error taking picture:', error);
+    if (!cameraRef.current) {
+      console.log('Camera ref not available');
+      Alert.alert(
+        'Camera Error', 
+        'Camera is not ready. Please wait a moment and try again.'
+      );
+      // Try to reinitialize
+      setCameraReady(false);
+      setTimeout(() => setCameraReady(true), 500);
+      return;
+    }
+
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.3,
+        base64: false,
+        skipProcessing: true,
+      });
+
+      if (photo?.uri) {
+        setCapturedImage(photo.uri);
+        setShowConfirmation(true);
+      }
+    } catch (error: any) {
+      console.error('Error taking picture:', error);
+      
+      // Handle specific error cases
+      if (error?.message?.includes('Camera is not ready') || 
+          error?.message?.includes('null') ||
+          error?.message?.includes('undefined')) {
+        Alert.alert(
+          'Camera Not Ready',
+          'Please wait a moment for the camera to initialize and try again.',
+          [
+            { 
+              text: 'OK', 
+              onPress: () => {
+                // Reset camera
+                setCameraReady(false);
+                setTimeout(() => setCameraReady(true), 1000);
+              }
+            }
+          ]
+        );
+      } else {
         Alert.alert('Error', 'Failed to capture image. Please try again.');
       }
     }
@@ -99,19 +160,27 @@ export default function ScanScreen() {
       // Now submit compressed image
       const receipt = await api.submitReceipt(manipulatedImage.uri);
 
+      // Success alert with better UX
       Alert.alert(
-        'Receipt Submitted!',
-        `Receipt has been submitted successfully!\n\nStatus: ${receipt.status}`,
+        'Success! 🎉',
+        `Receipt submitted successfully!\n\nStatus: ${receipt.status}\nPoints: ${receipt.pointsAwarded || 'Pending'}`,
         [
           {
             text: 'View Receipts',
-            onPress: () => router.push('/(tabs)/receipts'),
+            onPress: () => {
+              setShowConfirmation(false);
+              setCapturedImage(null);
+              router.push('/(tabs)/receipts');
+            },
           },
           {
             text: 'Scan Another',
             onPress: () => {
               setShowConfirmation(false);
               setCapturedImage(null);
+              // Re-initialize camera
+              setCameraReady(false);
+              setTimeout(() => setCameraReady(true), 100);
             },
             style: 'cancel',
           },
@@ -119,7 +188,7 @@ export default function ScanScreen() {
       );
     } catch (error: any) {
       console.error('Upload error:', error);
-      Alert.alert('Upload Error', error.message || 'Upload failed');
+      Alert.alert('Upload Error', error.message || 'Upload failed. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -128,11 +197,20 @@ export default function ScanScreen() {
   const retakePhoto = () => {
     setShowConfirmation(false);
     setCapturedImage(null);
+    // Re-initialize camera when going back
+    setCameraReady(false);
+    setTimeout(() => setCameraReady(true), 100);
   };
 
   function toggleCameraFacing() {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
   }
+
+  // Camera ready callback
+  const onCameraReady = () => {
+    console.log('Camera is ready');
+    setCameraReady(true);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -146,51 +224,67 @@ export default function ScanScreen() {
 
       {/* Camera Section */}
       <View style={styles.cameraContainer}>
-        <CameraView
-          style={styles.camera}
-          facing={facing}
-          ref={cameraRef}
-        />
+        {cameraReady ? (
+          <CameraView
+            style={styles.camera}
+            facing={facing}
+            ref={cameraRef}
+            onCameraReady={onCameraReady}
+          />
+        ) : (
+          <View style={[styles.camera, styles.cameraLoading]}>
+            <LoadingSpinner size={48} />
+            <Text style={styles.cameraLoadingText}>Initializing camera...</Text>
+          </View>
+        )}
 
         {/* Overlay - Outside CameraView */}
-        <View style={styles.overlay}>
-          <View style={styles.frameOverlay}>
-            <View style={styles.frameBackground} />
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
+        {cameraReady && (
+          <View style={styles.overlay}>
+            <View style={styles.frameOverlay}>
+              <View style={styles.frameBackground} />
+              <View style={[styles.corner, styles.topLeft]} />
+              <View style={[styles.corner, styles.topRight]} />
+              <View style={[styles.corner, styles.bottomLeft]} />
+              <View style={[styles.corner, styles.bottomRight]} />
 
-            <View style={styles.frameGuide}>
-              <Text style={styles.frameGuideText}>
-                Align receipt within frame
-              </Text>
+              <View style={styles.frameGuide}>
+                <Text style={styles.frameGuideText}>
+                  Align receipt within frame
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Camera Controls - Also outside */}
-        <View style={styles.controls}>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPress={toggleCameraFacing}
-            activeOpacity={0.7}
-          >
-            <FlipHorizontal size={24} color={Colors.background} />
-          </TouchableOpacity>
+        {cameraReady && (
+          <View style={styles.controls}>
+            <TouchableOpacity
+              style={styles.controlButton}
+              onPress={toggleCameraFacing}
+              activeOpacity={0.7}
+            >
+              <FlipHorizontal size={14} color={Colors.background} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.captureButton}
-            onPress={takePicture}
-            activeOpacity={0.8}
-          >
-            <View style={styles.captureButtonInner}>
-              <Camera size={32} color={Colors.background} />
-            </View>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.captureButton}
+              onPress={takePicture}
+              activeOpacity={0.8}
+              disabled={!cameraReady}
+            >
+              <View style={[
+                styles.captureButtonInner,
+                !cameraReady && styles.captureButtonDisabled
+              ]}>
+                <Camera size={32} color={Colors.background} />
+              </View>
+            </TouchableOpacity>
 
-          <View style={styles.controlButton} />
-        </View>
+            <View style={styles.controlButton} />
+          </View>
+        )}
       </View>
 
       {/* Instructions Card */}
@@ -363,6 +457,16 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
+  cameraLoading: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  cameraLoadingText: {
+    marginTop: 16,
+    color: Colors.textSecondary,
+    fontSize: 16,
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
@@ -469,6 +573,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  captureButtonDisabled: {
+    backgroundColor: Colors.textLight,
+    opacity: 0.5,
   },
 
   // Instructions

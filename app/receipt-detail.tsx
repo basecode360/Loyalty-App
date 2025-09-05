@@ -7,10 +7,11 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Calendar, DollarSign, Store, Award, Eye } from 'lucide-react-native';
+import { Calendar, DollarSign, Store, Award, Eye, ArrowLeft, Hash } from 'lucide-react-native';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -23,6 +24,7 @@ export default function ReceiptDetailScreen() {
   const router = useRouter();
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [imageLoading, setImageLoading] = useState(true);
 
   useEffect(() => {
     loadReceiptDetail();
@@ -30,19 +32,8 @@ export default function ReceiptDetailScreen() {
 
   const loadReceiptDetail = async () => {
     try {
-      // Mock receipt detail - in real app, fetch by ID
-      const mockReceipt: Receipt = {
-        id: receiptId || '1',
-        retailer: 'Walmart',
-        purchaseDate: '2024-01-15T10:30:00Z',
-        total: 89.45,
-        pointsAwarded: 89,
-        ocrConfidence: 0.98,
-        status: 'approved',
-        imageUrl: 'https://images.pexels.com/photos/5632371/pexels-photo-5632371.jpeg',
-        createdAt: '2024-01-15T10:35:00Z',
-      };
-      setReceipt(mockReceipt);
+      const data = await api.getReceiptById(receiptId || '');
+      setReceipt(data);
     } catch (error) {
       console.error('Error loading receipt detail:', error);
     } finally {
@@ -57,15 +48,13 @@ export default function ReceiptDetailScreen() {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
     });
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency: string = 'USD') => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency,
     }).format(amount);
   };
 
@@ -93,9 +82,9 @@ export default function ReceiptDetailScreen() {
       case 'rejected':
         return 'Receipt was rejected due to unclear image or invalid data';
       case 'processing':
-        return 'Receipt is being processed by our OCR system';
+        return 'Receipt is being processed by our AI system';
       case 'queued':
-        return 'Receipt is queued for processing';
+        return 'Receipt is queued for manual review';
       case 'duplicate':
         return 'This receipt has already been submitted';
       default:
@@ -118,6 +107,12 @@ export default function ReceiptDetailScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Receipt not found</Text>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -125,6 +120,18 @@ export default function ReceiptDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backIconButton}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Receipt Details</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Status Banner */}
         <Card style={styles.statusCard}>
@@ -149,6 +156,16 @@ export default function ReceiptDetailScreen() {
             </View>
           </View>
 
+          {receipt.invoiceNumber && (
+            <View style={styles.detailRow}>
+              <Hash size={20} color={Colors.primary} />
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Invoice Number</Text>
+                <Text style={styles.detailValue}>{receipt.invoiceNumber}</Text>
+              </View>
+            </View>
+          )}
+
           <View style={styles.detailRow}>
             <Calendar size={20} color={Colors.primary} />
             <View style={styles.detailContent}>
@@ -161,7 +178,9 @@ export default function ReceiptDetailScreen() {
             <DollarSign size={20} color={Colors.primary} />
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Total Amount</Text>
-              <Text style={styles.detailValue}>{formatCurrency(receipt.total)}</Text>
+              <Text style={styles.detailValue}>
+                {formatCurrency(receipt.total, receipt.currency || 'USD')}
+              </Text>
             </View>
           </View>
 
@@ -170,7 +189,7 @@ export default function ReceiptDetailScreen() {
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Points Awarded</Text>
               <Text style={[styles.detailValue, { color: Colors.accent }]}>
-                {receipt.status === 'approved' ? receipt.pointsAwarded : 'Pending'}
+                {receipt.status === 'approved' ? `+${receipt.pointsAwarded}` : 'Pending'}
               </Text>
             </View>
           </View>
@@ -190,13 +209,25 @@ export default function ReceiptDetailScreen() {
         {receipt.imageUrl && (
           <Card style={styles.imageCard}>
             <Text style={styles.imageTitle}>Receipt Image</Text>
-            <TouchableOpacity style={styles.imageContainer}>
+            <View style={styles.imageContainer}>
+              {imageLoading && (
+                <View style={styles.imageLoadingContainer}>
+                  <ActivityIndicator size="large" color={Colors.primary} />
+                  <Text style={styles.loadingText}>Loading image...</Text>
+                </View>
+              )}
               <Image
                 source={{ uri: receipt.imageUrl }}
-                style={styles.receiptImage}
+                style={[styles.receiptImage, imageLoading && { opacity: 0 }]}
                 resizeMode="contain"
+                onLoadStart={() => setImageLoading(true)}
+                onLoadEnd={() => setImageLoading(false)}
+                onError={() => {
+                  setImageLoading(false);
+                  console.error('Failed to load image');
+                }}
               />
-            </TouchableOpacity>
+            </View>
           </Card>
         )}
 
@@ -215,12 +246,16 @@ export default function ReceiptDetailScreen() {
           <View style={styles.timelineItem}>
             <View style={[
               styles.timelineDot, 
-              receipt.status !== 'queued' ? styles.timelineDotCompleted : styles.timelineDotPending
+              receipt.status !== 'queued' && receipt.status !== 'processing' 
+                ? styles.timelineDotCompleted 
+                : styles.timelineDotPending
             ]} />
             <View style={styles.timelineContent}>
-              <Text style={styles.timelineLabel}>OCR Processing</Text>
+              <Text style={styles.timelineLabel}>AI Processing</Text>
               <Text style={styles.timelineTime}>
-                {receipt.status !== 'queued' ? 'Completed' : 'In progress...'}
+                {receipt.status !== 'queued' && receipt.status !== 'processing' 
+                  ? 'Completed' 
+                  : 'In progress...'}
               </Text>
             </View>
           </View>
@@ -228,20 +263,22 @@ export default function ReceiptDetailScreen() {
           <View style={styles.timelineItem}>
             <View style={[
               styles.timelineDot, 
-              receipt.status === 'approved' || receipt.status === 'rejected' 
+              receipt.status === 'approved' || receipt.status === 'rejected' || receipt.status === 'duplicate'
                 ? styles.timelineDotCompleted 
                 : styles.timelineDotPending
             ]} />
             <View style={styles.timelineContent}>
               <Text style={styles.timelineLabel}>Review Complete</Text>
               <Text style={styles.timelineTime}>
-                {receipt.status === 'approved' || receipt.status === 'rejected' 
+                {receipt.status === 'approved' || receipt.status === 'rejected' || receipt.status === 'duplicate'
                   ? formatDate(receipt.createdAt) 
                   : 'Pending...'}
               </Text>
             </View>
           </View>
         </Card>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -251,6 +288,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.backgroundSecondary,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  backIconButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    ...Typography.title3,
+    color: Colors.text,
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -264,10 +319,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Spacing.xl,
   },
   errorText: {
     ...Typography.body,
     color: Colors.error,
+    marginBottom: Spacing.lg,
+  },
+  backButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: Colors.background,
+    fontWeight: '600',
   },
   statusCard: {
     marginHorizontal: Spacing.lg,
@@ -319,6 +386,22 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: Colors.backgroundSecondary,
+    minHeight: 400,
+    position: 'relative',
+  },
+  imageLoadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  loadingText: {
+    marginTop: 10,
+    color: Colors.textSecondary,
   },
   receiptImage: {
     width: '100%',

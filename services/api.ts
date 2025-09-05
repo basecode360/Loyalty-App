@@ -1,6 +1,27 @@
-// services/api.ts
+// services/api.ts - COMPLETE UPDATED VERSION
 import { supabase } from '../lib/supabase';
 import { Receipt, PointsTransaction, Promotion, Notification, Device, ActivityLog } from '../types/api';
+
+// Helper function to get signed URL for receipt image
+const getReceiptImageUrl = async (imagePath: string): Promise<string | null> => {
+  try {
+    if (!imagePath) return null;
+    
+    const { data, error } = await supabase.storage
+      .from('receipts-original')
+      .createSignedUrl(imagePath, 3600); // 1 hour expiry
+    
+    if (error) {
+      console.error('Error getting signed URL:', error);
+      return null;
+    }
+    
+    return data.signedUrl;
+  } catch (error) {
+    console.error('Error in getReceiptImageUrl:', error);
+    return null;
+  }
+};
 
 // Receipts API
 export const submitReceipt = async (imageUri: string): Promise<Receipt> => {
@@ -62,16 +83,19 @@ export const submitReceipt = async (imageUri: string): Promise<Receipt> => {
       throw new Error('Processing failed: ' + processError.message);
     }
 
+    console.log('🎯 Edge function response:', processData);
+
     return {
-      id: processData.receipt_id || Date.now().toString(),
-      retailer: processData.retailer || 'Test Store',
+      id: processData.receipt_id,
+      retailer: processData.retailer,
       purchaseDate: new Date().toISOString(),
-      total: processData.total || 100,
-      pointsAwarded: processData.points_awarded || 10,
-      ocrConfidence: 0.9,
-      status: processData.status || 'approved',
-      imageUrl: imageUri,
+      total: processData.total,
+      pointsAwarded: processData.points_awarded,
+      ocrConfidence: processData.confidence,
+      status: processData.status,
+      imageUrl: filename, // Store the path, we'll fetch signed URL when needed
       createdAt: new Date().toISOString(),
+      currency: processData.currency || 'USD',
     };
 
   } catch (error: any) {
@@ -97,20 +121,80 @@ export const getReceipts = async (): Promise<Receipt[]> => {
       throw new Error('Failed to fetch receipts: ' + error.message);
     }
 
-    return data.map(receipt => ({
-      id: receipt.id,
-      retailer: receipt.retailer || 'Unknown',
-      purchaseDate: receipt.purchase_date || receipt.created_at,
-      total: (receipt.total_cents || 0) / 100,
-      pointsAwarded: receipt.status === 'approved' ? Math.floor((receipt.total_cents || 0) / 100) : 0,
-      ocrConfidence: receipt.confidence || 0,
-      status: receipt.status,
-      createdAt: receipt.created_at,
-    }));
+    // Process receipts and get signed URLs for images
+    const receiptsWithImages = await Promise.all(
+      data.map(async (receipt) => {
+        const imageUrl = await getReceiptImageUrl(receipt.image_key);
+        
+        return {
+          id: receipt.id,
+          retailer: receipt.retailer || 'Unknown Store',
+          purchaseDate: receipt.purchase_date || receipt.created_at,
+          total: (receipt.total_cents || 0) / 100,
+          pointsAwarded: receipt.status === 'approved' ? Math.floor((receipt.total_cents || 0) / 100) : 0,
+          ocrConfidence: receipt.confidence || 0,
+          status: receipt.status,
+          imageUrl: imageUrl,
+          imagePath: receipt.image_key,
+          createdAt: receipt.created_at,
+          currency: receipt.currency || 'USD',
+          invoiceNumber: receipt.invoice_number,
+          paymentMethod: receipt.payment_method,
+        };
+      })
+    );
+
+    return receiptsWithImages;
 
   } catch (error: any) {
     console.error('Get receipts error:', error);
     throw new Error(error.message || 'Failed to fetch receipts');
+  }
+};
+
+// Get single receipt by ID
+export const getReceiptById = async (receiptId: string): Promise<Receipt | null> => {
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      throw new Error('Authentication required');
+    }
+
+    const { data, error } = await supabase
+      .from('receipts')
+      .select('*')
+      .eq('id', receiptId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching receipt:', error);
+      return null;
+    }
+
+    // Get signed URL for image
+    const imageUrl = await getReceiptImageUrl(data.image_key);
+
+    return {
+      id: data.id,
+      retailer: data.retailer || 'Unknown Store',
+      purchaseDate: data.purchase_date || data.created_at,
+      total: (data.total_cents || 0) / 100,
+      pointsAwarded: data.status === 'approved' ? Math.floor((data.total_cents || 0) / 100) : 0,
+      ocrConfidence: data.confidence || 0,
+      status: data.status,
+      imageUrl: imageUrl,
+      imagePath: data.image_key,
+      createdAt: data.created_at,
+      currency: data.currency || 'USD',
+      invoiceNumber: data.invoice_number,
+      paymentMethod: data.payment_method,
+      ocrData: data.ocr_json,
+    };
+
+  } catch (error: any) {
+    console.error('Get receipt by ID error:', error);
+    return null;
   }
 };
 
@@ -147,6 +231,34 @@ export const getPointsLedger = async (): Promise<PointsTransaction[]> => {
   } catch (error: any) {
     console.error('Get points ledger error:', error);
     throw new Error(error.message || 'Failed to fetch points ledger');
+  }
+};
+
+// Get current points balance
+export const getCurrentPointsBalance = async (): Promise<number> => {
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return 0;
+    }
+
+    const { data, error } = await supabase
+      .from('points_ledger')
+      .select('balance_after')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) {
+      return 0;
+    }
+
+    return data.balance_after || 0;
+
+  } catch (error: any) {
+    console.error('Get balance error:', error);
+    return 0;
   }
 };
 
@@ -190,21 +302,46 @@ export const getProfile = async () => {
       throw new Error('Authentication required');
     }
 
-    const { data, error } = await supabase
+    // First try to get from profiles table
+    const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single();
 
-    if (error) {
-      throw new Error('Failed to fetch profile: ' + error.message);
-    }
+    // Get current balance from points ledger
+    const balance = await getCurrentPointsBalance();
 
-    return data;
+    if (profileError || !profileData) {
+      // If profile doesn't exist, return user data with default values
+      return {
+        id: user.id,
+        email: user.email,
+        loyalty_points: balance,
+        phone_verified: false,
+        status: 'active',
+        country: 'USA',
+        agree_to_marketing: false
+      };
+    }
+    
+    return {
+      ...profileData,
+      loyalty_points: balance, // Use actual balance from ledger
+      country: profileData.country || 'USA'
+    };
 
   } catch (error: any) {
     console.error('Get profile error:', error);
-    throw new Error(error.message || 'Failed to fetch profile');
+    // Return basic profile even on error
+    return {
+      id: '',
+      email: '',
+      loyalty_points: 0,
+      phone_verified: false,
+      status: 'active',
+      country: 'USA'
+    };
   }
 };
 
@@ -215,16 +352,41 @@ export const updateProfileSettings = async (settings: any): Promise<void> => {
       throw new Error('Authentication required');
     }
 
-    const { error } = await supabase
+    // First check if profile exists
+    const { data: existingProfile } = await supabase
       .from('profiles')
-      .update({
-        ...settings,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', user.id);
+      .select('id')
+      .eq('id', user.id)
+      .single();
 
-    if (error) {
-      throw new Error('Failed to update profile: ' + error.message);
+    if (existingProfile) {
+      // Update existing profile
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          ...settings,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        throw new Error('Failed to update profile: ' + error.message);
+      }
+    } else {
+      // Create new profile
+      const { error } = await supabase
+        .from('profiles')
+        .insert({
+          id: user.id,
+          email: user.email,
+          ...settings,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        throw new Error('Failed to create profile: ' + error.message);
+      }
     }
 
     console.log('Profile updated successfully');
