@@ -1,5 +1,5 @@
-// app/(tabs)/profile.tsx
-import React from 'react';
+// app/(tabs)/profile.tsx - UPDATED VERSION
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Alert,
   Image,
+  Switch,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,16 +24,109 @@ import {
   ChevronRight,
   Mail,
   MapPin,
-  Calendar
+  Calendar,
+  Phone,
+  Shield,
+  Globe,
+  RefreshCw,
+  Edit
 } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { ListItem } from '../../components/ui/ListItem';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { Colors, Typography, Spacing } from '../../constants/Colors';
+import { PushNotificationService } from '../../services/pushNotifications';
+import * as api from '../../services/api';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, userProfile, signOut } = useAuth();
+  const { user, userProfile, signOut, refreshProfile } = useAuth();
+  
+  // States for additional data
+  const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [deviceCount, setDeviceCount] = useState(0);
+  const [activityCount, setActivityCount] = useState(0);
+  const [pushToken, setPushToken] = useState(null);
+  const [notificationSettings, setNotificationSettings] = useState({
+    receipts: true,
+    marketing: false,
+    promotions: true,
+  });
+
+  useEffect(() => {
+    loadProfileData();
+    initializePushNotifications();
+  }, []);
+
+  const loadProfileData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Load devices count
+      const devices = await api.getDevices();
+      setDeviceCount(devices.length);
+      
+      // Load activity count
+      const activities = await api.getActivityLog();
+      setActivityCount(activities.length);
+      
+      // Load notification preferences
+      if (userProfile?.notification_preferences) {
+        setNotificationSettings({
+          receipts: userProfile.notification_preferences.receipts !== false,
+          marketing: userProfile.notification_preferences.marketing === true,
+          promotions: userProfile.notification_preferences.promotions !== false,
+        });
+      }
+      
+      // Refresh profile
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+    } catch (error) {
+      console.error('Error loading profile data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const initializePushNotifications = async () => {
+    try {
+      const token = await PushNotificationService.registerForPushNotifications();
+      if (token) {
+        setPushToken(token);
+        await PushNotificationService.savePushTokenToDatabase(token);
+      }
+    } catch (error) {
+      console.error('Error initializing push notifications:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadProfileData();
+    setRefreshing(false);
+  };
+
+  const handleNotificationToggle = async (key: string, value: boolean) => {
+    try {
+      const newSettings = { ...notificationSettings, [key]: value };
+      setNotificationSettings(newSettings);
+      
+      // Save to backend
+      await api.updateProfileSettings({
+        notification_preferences: newSettings
+      });
+      
+    } catch (error) {
+      console.error('Error updating notification settings:', error);
+      // Revert on error
+      setNotificationSettings(notificationSettings);
+      Alert.alert('Error', 'Failed to update notification settings');
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -51,6 +146,7 @@ export default function ProfileScreen() {
               router.replace('/(auth)/splash');
             } catch (error) {
               console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out');
             }
           },
         },
@@ -104,9 +200,22 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Header with Edit Button */}
         <View style={styles.header}>
           <Text style={styles.title}>Profile</Text>
+          <TouchableOpacity 
+            style={styles.editButton}
+            onPress={() => router.push('/edit-profile')}
+          >
+            <Edit size={20} color={Colors.primary} />
+          </TouchableOpacity>
         </View>
 
         {/* User Info Card */}
@@ -127,13 +236,64 @@ export default function ProfileScreen() {
               <View style={styles.emailRow}>
                 <Mail size={16} color={Colors.textSecondary} />
                 <Text style={styles.userEmail}>{getUserEmail()}</Text>
+                {userProfile?.email_verified && (
+                  <Text style={styles.verifiedBadge}>✓</Text>
+                )}
               </View>
               <Text style={styles.userPoints}>
                 {getUserPoints().toLocaleString()} Points
               </Text>
+              {/* Status indicator */}
+              <View style={styles.statusRow}>
+                <View style={[
+                  styles.statusDot,
+                  userProfile?.status === 'active' ? styles.statusActive : styles.statusInactive
+                ]} />
+                <Text style={styles.statusText}>
+                  {userProfile?.status === 'active' ? 'Active Member' : 'Inactive'}
+                </Text>
+              </View>
             </View>
           </View>
         </Card>
+
+        {/* Quick Notification Settings */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Settings</Text>
+          <Card padding="sm">
+            <View style={styles.notificationItem}>
+              <View style={styles.notificationInfo}>
+                <Bell size={20} color={Colors.primary} />
+                <View style={styles.notificationText}>
+                  <Text style={styles.notificationLabel}>Receipt Updates</Text>
+                  <Text style={styles.notificationSubtext}>Get notified when receipts are processed</Text>
+                </View>
+              </View>
+              <Switch
+                value={notificationSettings.receipts}
+                onValueChange={(value) => handleNotificationToggle('receipts', value)}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.background}
+              />
+            </View>
+            
+            <View style={styles.notificationItem}>
+              <View style={styles.notificationInfo}>
+                <Globe size={20} color={Colors.primary} />
+                <View style={styles.notificationText}>
+                  <Text style={styles.notificationLabel}>Marketing</Text>
+                  <Text style={styles.notificationSubtext}>Promotional offers and news</Text>
+                </View>
+              </View>
+              <Switch
+                value={notificationSettings.marketing}
+                onValueChange={(value) => handleNotificationToggle('marketing', value)}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.background}
+              />
+            </View>
+          </Card>
+        </View>
 
         {/* Account Section */}
         <View style={styles.section}>
@@ -152,6 +312,13 @@ export default function ProfileScreen() {
               leftElement={<CreditCard size={20} color={Colors.textSecondary} />}
               rightElement={<ChevronRight size={20} color={Colors.textSecondary} />}
               onPress={() => router.push('/points-ledger')}
+            />
+            <ListItem
+              title="Phone Verification"
+              subtitle={userProfile?.phone_verified ? `${userProfile?.phone} ✓` : 'Not verified'}
+              leftElement={<Phone size={20} color={Colors.textSecondary} />}
+              rightElement={<ChevronRight size={20} color={Colors.textSecondary} />}
+              onPress={() => router.push('/phone-verification')}
               style={{ borderBottomWidth: 0 }}
             />
           </Card>
@@ -163,17 +330,24 @@ export default function ProfileScreen() {
           <Card padding="sm">
             <ListItem
               title="Manage Devices"
-              subtitle="View and manage your devices"
+              subtitle={`${deviceCount} device${deviceCount !== 1 ? 's' : ''} connected`}
               leftElement={<Smartphone size={20} color={Colors.textSecondary} />}
               rightElement={<ChevronRight size={20} color={Colors.textSecondary} />}
               onPress={() => router.push('/manage-devices')}
             />
             <ListItem
               title="Activity Log"
-              subtitle="View account activity history"
+              subtitle={`${activityCount} recent activities`}
               leftElement={<Activity size={20} color={Colors.textSecondary} />}
               rightElement={<ChevronRight size={20} color={Colors.textSecondary} />}
               onPress={() => router.push('/activity-log')}
+            />
+            <ListItem
+              title="Privacy & Security"
+              subtitle="Account security settings"
+              leftElement={<Shield size={20} color={Colors.textSecondary} />}
+              rightElement={<ChevronRight size={20} color={Colors.textSecondary} />}
+              onPress={() => router.push('/privacy-settings')}
               style={{ borderBottomWidth: 0 }}
             />
           </Card>
@@ -185,7 +359,7 @@ export default function ProfileScreen() {
           <Card padding="sm">
             <ListItem
               title="Notifications"
-              subtitle={`Marketing: ${userProfile?.agree_to_marketing ? 'Enabled' : 'Disabled'}`}
+              subtitle={`Push: ${pushToken ? 'Enabled' : 'Disabled'} • Marketing: ${notificationSettings.marketing ? 'On' : 'Off'}`}
               leftElement={<Bell size={20} color={Colors.textSecondary} />}
               rightElement={<ChevronRight size={20} color={Colors.textSecondary} />}
               onPress={() => router.push('/notifications')}
@@ -247,11 +421,32 @@ export default function ProfileScreen() {
                 styles.detailValue,
                 { color: userProfile?.email_verified ? Colors.accent : Colors.error }
               ]}>
-                {userProfile?.email_verified ? 'Verified' : 'Not Verified'}
+                {userProfile?.email_verified ? 'Verified ✓' : 'Not Verified'}
+              </Text>
+            </View>
+
+            <View style={styles.accountDetail}>
+              <View style={styles.detailRow}>
+                <Phone size={16} color={Colors.textSecondary} />
+                <Text style={styles.detailLabel}>Phone Status</Text>
+              </View>
+              <Text style={[
+                styles.detailValue,
+                { color: userProfile?.phone_verified ? Colors.accent : Colors.error }
+              ]}>
+                {userProfile?.phone_verified ? 'Verified ✓' : 'Not Verified'}
               </Text>
             </View>
           </Card>
         </View>
+
+        {/* Loading state */}
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <LoadingSpinner size={24} />
+            <Text style={styles.loadingText}>Loading profile data...</Text>
+          </View>
+        )}
 
         {/* Sign Out Button */}
         <View style={styles.section}>
@@ -263,12 +458,16 @@ export default function ProfileScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>niche. v1.0.0</Text>
+          {pushToken && (
+            <Text style={styles.footerSubtext}>Push notifications enabled</Text>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// Updated styles with new components
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -279,6 +478,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.lg,
     backgroundColor: Colors.background,
@@ -289,6 +491,11 @@ const styles = StyleSheet.create({
     ...Typography.title2,
     color: Colors.text,
     fontWeight: '600',
+  },
+  editButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.backgroundSecondary,
   },
   userCard: {
     marginHorizontal: Spacing.lg,
@@ -335,12 +542,39 @@ const styles = StyleSheet.create({
     ...Typography.body,
     color: Colors.textSecondary,
     marginLeft: Spacing.xs,
+    flex: 1,
+  },
+  verifiedBadge: {
+    color: Colors.accent,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   userPoints: {
     ...Typography.bodyBold,
     color: Colors.accent,
     fontWeight: '600',
     marginBottom: Spacing.xs,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  statusActive: {
+    backgroundColor: Colors.accent,
+  },
+  statusInactive: {
+    backgroundColor: Colors.error,
+  },
+  statusText: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    fontSize: 12,
   },
   section: {
     marginTop: Spacing.lg,
@@ -352,6 +586,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: Spacing.sm,
     marginLeft: Spacing.xs,
+  },
+  // Notification settings
+  notificationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  notificationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  notificationText: {
+    marginLeft: Spacing.sm,
+    flex: 1,
+  },
+  notificationLabel: {
+    ...Typography.body,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  notificationSubtext: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    fontSize: 12,
   },
   accountDetail: {
     flexDirection: 'row',
@@ -376,6 +639,17 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     maxWidth: '50%',
     textAlign: 'right',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.lg,
+  },
+  loadingText: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    marginLeft: Spacing.sm,
   },
   signOutButton: {
     flexDirection: 'row',
@@ -402,5 +676,10 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.textLight,
     marginBottom: Spacing.xs,
+  },
+  footerSubtext: {
+    ...Typography.caption,
+    color: Colors.textLight,
+    fontSize: 10,
   },
 });

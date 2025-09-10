@@ -16,7 +16,9 @@ import { Camera, Upload, X, Check, RotateCcw, FlipHorizontal } from 'lucide-reac
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { UploadProgress } from '../../components/ui/UploadProgress';
 import { Colors, Typography, Spacing } from '../../constants/Colors';
+import { useRealtimeReceipts } from '../../hooks/useRealtimeReceipts';
 import * as api from '../../services/api';
 import * as ImageManipulator from 'expo-image-manipulator';
 
@@ -26,27 +28,34 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  
+  // Upload progress states
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<'uploading' | 'processing' | 'complete' | 'error'>('uploading');
+  const [showUploadProgress, setShowUploadProgress] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState('');
+  
   const cameraRef = useRef<CameraView>(null);
+  
+  // Initialize real-time receipt updates
+  useRealtimeReceipts();
 
   // Reset camera state when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      // Reset states when screen is focused
       setCameraReady(false);
       setShowConfirmation(false);
       setCapturedImage(null);
-      setIsUploading(false);
+      setShowUploadProgress(false);
+      setUploadProgress(0);
       
-      // Small delay to ensure camera is ready
       const timer = setTimeout(() => {
         setCameraReady(true);
       }, 100);
 
       return () => {
         clearTimeout(timer);
-        // Clean up when leaving screen
         setCameraReady(false);
       };
     }, [])
@@ -84,20 +93,16 @@ export default function ScanScreen() {
   }
 
   const takePicture = async () => {
-    // Check if camera is ready
     if (!cameraReady) {
-      console.log('Camera not ready yet');
       Alert.alert('Please Wait', 'Camera is initializing...');
       return;
     }
 
     if (!cameraRef.current) {
-      console.log('Camera ref not available');
       Alert.alert(
         'Camera Error', 
         'Camera is not ready. Please wait a moment and try again.'
       );
-      // Try to reinitialize
       setCameraReady(false);
       setTimeout(() => setCameraReady(true), 500);
       return;
@@ -117,7 +122,6 @@ export default function ScanScreen() {
     } catch (error: any) {
       console.error('Error taking picture:', error);
       
-      // Handle specific error cases
       if (error?.message?.includes('Camera is not ready') || 
           error?.message?.includes('null') ||
           error?.message?.includes('undefined')) {
@@ -128,7 +132,6 @@ export default function ScanScreen() {
             { 
               text: 'OK', 
               onPress: () => {
-                // Reset camera
                 setCameraReady(false);
                 setTimeout(() => setCameraReady(true), 1000);
               }
@@ -144,60 +147,76 @@ export default function ScanScreen() {
   const handleUploadReceipt = async () => {
     if (!capturedImage) return;
 
-    setIsUploading(true);
+    setShowUploadProgress(true);
+    setUploadStage('uploading');
+    setUploadProgress(0);
+
     try {
+      // Step 1: Compress image
+      setUploadProgress(20);
       console.log('Compressing image...');
 
-      // Compress image first
       const manipulatedImage = await ImageManipulator.manipulateAsync(
         capturedImage,
-        [{ resize: { width: 800 } }], // Resize to max 800px width
+        [{ resize: { width: 800 } }],
         { compress: 0.3, format: ImageManipulator.SaveFormat.JPEG }
       );
 
+      setUploadProgress(40);
       console.log('Compressed image URI:', manipulatedImage.uri);
 
-      // Now submit compressed image
+      // Step 2: Upload image
+      setUploadProgress(60);
+      setUploadStage('uploading');
+
+      // Step 3: Process with API
+      setUploadProgress(80);
+      setUploadStage('processing');
+
       const receipt = await api.submitReceipt(manipulatedImage.uri);
 
-      // Success alert with better UX
-      Alert.alert(
-        'Success! 🎉',
-        `Receipt submitted successfully!\n\nStatus: ${receipt.status}\nPoints: ${receipt.pointsAwarded || 'Pending'}`,
-        [
-          {
-            text: 'View Receipts',
-            onPress: () => {
-              setShowConfirmation(false);
-              setCapturedImage(null);
-              router.push('/(tabs)/receipts');
-            },
-          },
-          {
-            text: 'Scan Another',
-            onPress: () => {
-              setShowConfirmation(false);
-              setCapturedImage(null);
-              // Re-initialize camera
-              setCameraReady(false);
-              setTimeout(() => setCameraReady(true), 100);
-            },
-            style: 'cancel',
-          },
-        ]
-      );
+      // Step 4: Complete
+      setUploadProgress(100);
+      setUploadStage('complete');
+      
+      let message = '';
+      if (receipt.status === 'approved') {
+        message = `Receipt approved! ${receipt.pointsAwarded || 0} points earned.`;
+      } else if (receipt.status === 'queued') {
+        message = 'Receipt submitted for review. You\'ll be notified within 24 hours.';
+      } else if (receipt.status === 'duplicate') {
+        message = 'This receipt has already been submitted.';
+      } else {
+        message = 'Receipt submitted successfully!';
+      }
+      
+      setUploadMessage(message);
+
     } catch (error: any) {
       console.error('Upload error:', error);
-      Alert.alert('Upload Error', error.message || 'Upload failed. Please try again.');
-    } finally {
-      setIsUploading(false);
+      setUploadStage('error');
+      setUploadMessage(error.message || 'Upload failed. Please try again.');
+    }
+  };
+
+  const handleUploadComplete = () => {
+    setShowUploadProgress(false);
+    setShowConfirmation(false);
+    setCapturedImage(null);
+    
+    if (uploadStage === 'complete') {
+      // Navigate to receipts screen to show the new receipt
+      router.push('/(tabs)/receipts');
+    } else {
+      // Re-initialize camera for retry
+      setCameraReady(false);
+      setTimeout(() => setCameraReady(true), 100);
     }
   };
 
   const retakePhoto = () => {
     setShowConfirmation(false);
     setCapturedImage(null);
-    // Re-initialize camera when going back
     setCameraReady(false);
     setTimeout(() => setCameraReady(true), 100);
   };
@@ -206,7 +225,6 @@ export default function ScanScreen() {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
   }
 
-  // Camera ready callback
   const onCameraReady = () => {
     console.log('Camera is ready');
     setCameraReady(true);
@@ -238,52 +256,50 @@ export default function ScanScreen() {
           </View>
         )}
 
-        {/* Overlay - Outside CameraView */}
         {cameraReady && (
-          <View style={styles.overlay}>
-            <View style={styles.frameOverlay}>
-              <View style={styles.frameBackground} />
-              <View style={[styles.corner, styles.topLeft]} />
-              <View style={[styles.corner, styles.topRight]} />
-              <View style={[styles.corner, styles.bottomLeft]} />
-              <View style={[styles.corner, styles.bottomRight]} />
+          <>
+            <View style={styles.overlay}>
+              <View style={styles.frameOverlay}>
+                <View style={styles.frameBackground} />
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
 
-              <View style={styles.frameGuide}>
-                <Text style={styles.frameGuideText}>
-                  Align receipt within frame
-                </Text>
+                <View style={styles.frameGuide}>
+                  <Text style={styles.frameGuideText}>
+                    Align receipt within frame
+                  </Text>
+                </View>
               </View>
             </View>
-          </View>
-        )}
 
-        {/* Camera Controls - Also outside */}
-        {cameraReady && (
-          <View style={styles.controls}>
-            <TouchableOpacity
-              style={styles.controlButton}
-              onPress={toggleCameraFacing}
-              activeOpacity={0.7}
-            >
-              <FlipHorizontal size={14} color={Colors.background} />
-            </TouchableOpacity>
+            <View style={styles.controls}>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={toggleCameraFacing}
+                activeOpacity={0.7}
+              >
+                <FlipHorizontal size={14} color={Colors.background} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.captureButton}
-              onPress={takePicture}
-              activeOpacity={0.8}
-              disabled={!cameraReady}
-            >
-              <View style={[
-                styles.captureButtonInner,
-                !cameraReady && styles.captureButtonDisabled
-              ]}>
-                <Camera size={32} color={Colors.background} />
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.captureButton}
+                onPress={takePicture}
+                activeOpacity={0.8}
+                disabled={!cameraReady}
+              >
+                <View style={[
+                  styles.captureButtonInner,
+                  !cameraReady && styles.captureButtonDisabled
+                ]}>
+                  <Camera size={32} color={Colors.background} />
+                </View>
+              </TouchableOpacity>
 
-            <View style={styles.controlButton} />
-          </View>
+              <View style={styles.controlButton} />
+            </View>
+          </>
         )}
       </View>
 
@@ -316,6 +332,15 @@ export default function ScanScreen() {
         </Card>
       </View>
 
+      {/* Upload Progress Modal */}
+      <UploadProgress
+        visible={showUploadProgress}
+        progress={uploadProgress}
+        stage={uploadStage}
+        message={uploadMessage}
+        onComplete={handleUploadComplete}
+      />
+
       {/* Confirmation Modal */}
       <Modal
         visible={showConfirmation}
@@ -323,7 +348,6 @@ export default function ScanScreen() {
         presentationStyle="fullScreen"
       >
         <SafeAreaView style={styles.modalContainer}>
-          {/* Modal Header */}
           <View style={styles.modalHeader}>
             <TouchableOpacity
               style={styles.modalHeaderButton}
@@ -336,7 +360,6 @@ export default function ScanScreen() {
             <View style={styles.modalHeaderButton} />
           </View>
 
-          {/* Image Preview */}
           <View style={styles.imageContainer}>
             <View style={styles.imageWrapper}>
               {capturedImage && (
@@ -349,7 +372,6 @@ export default function ScanScreen() {
             </Text>
           </View>
 
-          {/* Modal Actions */}
           <View style={styles.modalActions}>
             <Button
               title="Retake Photo"
@@ -361,9 +383,8 @@ export default function ScanScreen() {
             <Button
               title="Upload Receipt"
               onPress={handleUploadReceipt}
-              loading={isUploading}
               style={styles.modalButton}
-              icon={!isUploading ? <Upload size={20} color={Colors.background} /> : undefined}
+              icon={<Upload size={20} color={Colors.background} />}
             />
           </View>
         </SafeAreaView>
@@ -372,6 +393,7 @@ export default function ScanScreen() {
   );
 }
 
+// Styles remain the same as original scan.tsx
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -384,8 +406,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
   },
-
-  // Header Styles
   header: {
     paddingHorizontal: 20,
     paddingTop: 16,
@@ -408,8 +428,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 20,
   },
-
-  // Permission Styles
   permissionIconContainer: {
     width: 120,
     height: 120,
@@ -440,8 +458,6 @@ const styles = StyleSheet.create({
     minWidth: 200,
     paddingVertical: 16,
   },
-
-  // Camera Styles
   cameraContainer: {
     flex: 1,
     marginHorizontal: 20,
@@ -533,8 +549,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
   },
-
-  // Controls
   controls: {
     position: 'absolute',
     bottom: 40,
@@ -578,8 +592,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.textLight,
     opacity: 0.5,
   },
-
-  // Instructions
   instructionsSection: {
     paddingHorizontal: 20,
     paddingBottom: 20,
@@ -621,8 +633,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     flex: 1,
   },
-
-  // Modal Styles
   modalContainer: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -650,8 +660,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 20,
   },
-
-  // Image Preview
   imageContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -684,8 +692,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingHorizontal: 20,
   },
-
-  // Modal Actions
   modalActions: {
     flexDirection: 'row',
     paddingHorizontal: 20,
