@@ -26,17 +26,20 @@ const getReceiptImageUrl = async (imagePath: string): Promise<string | null> => 
 // Receipts API
 export const submitReceipt = async (imageUri: string): Promise<Receipt> => {
   try {
-    console.log('📸 Starting receipt submission...');
+    console.log('📸 Starting receipt submission process...');
+    console.log('📸 Image URI provided:', imageUri ? 'YES' : 'NO');
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       throw new Error('Please login first');
     }
 
-    // Try signed URL approach for large files
-    const filename = `${user.id}/receipt_${Date.now()}.jpg`;
+    // Create unique filename with timestamp and random string
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 9);
+    const filename = `${user.id}/receipt_${timestamp}_${random}.jpg`;
 
-    console.log('Creating signed URL...');
+    console.log('Creating signed URL with unique filename:', filename);
 
     const { data: signedUrlData, error: signedError } = await supabase.storage
       .from('receipts-original')
@@ -66,41 +69,86 @@ export const submitReceipt = async (imageUri: string): Promise<Receipt> => {
 
     console.log('✅ Image uploaded successfully');
 
-    // Now call edge function
+    // Call edge function
+    console.log('🚀 Calling Supabase edge function for AI processing...');
     const { data: { session } } = await supabase.auth.getSession();
+    console.log('🔑 Session available:', session?.access_token ? 'YES' : 'NO');
+
+    const requestBody = {
+      image_path: filename,
+      timestamp: timestamp, // Pass timestamp to edge function
+    };
+    
+    console.log('🚀 Edge function request body:', requestBody);
+    const startTime = Date.now();
 
     const { data: processData, error: processError } = await supabase.functions
       .invoke('submit-receipt', {
-        body: {
-          image_path: filename
-        },
+        body: requestBody,
         headers: {
           Authorization: `Bearer ${session?.access_token}`
         }
       });
 
+    const endTime = Date.now();
+    console.log('⏱️ Edge function call completed in', endTime - startTime, 'ms');
+
     if (processError) {
+      console.error('❌ Edge function error:', processError);
       throw new Error('Processing failed: ' + processError.message);
     }
 
-    console.log('🎯 Edge function response:', processData);
+    console.log('🎯 Edge function response:', JSON.stringify(processData, null, 2));
 
+    // Handle different response statuses
+    if (processData.status === 'duplicate' && !processData.success) {
+      // For duplicate, return the existing receipt info
+      return {
+        id: processData.receipt_id,
+        retailer: processData.retailer || 'Unknown Store',
+        purchaseDate: new Date().toISOString(),
+        total: processData.total || 0,
+        pointsAwarded: 0,
+        ocrConfidence: processData.confidence || 0,
+        status: 'duplicate',
+        imageUrl: filename,
+        createdAt: new Date().toISOString(),
+        currency: processData.currency || 'PKR',
+      };
+    }
+
+    // Normal success response
     return {
       id: processData.receipt_id,
-      retailer: processData.retailer,
-      purchaseDate: new Date().toISOString(),
-      total: processData.total,
-      pointsAwarded: processData.points_awarded,
-      ocrConfidence: processData.confidence,
+      retailer: processData.retailer || 'Unknown Store',
+      purchaseDate: processData.purchase_date || new Date().toISOString(),
+      total: processData.total || 0,
+      pointsAwarded: processData.points_awarded || 0,
+      ocrConfidence: processData.confidence || 0,
       status: processData.status,
-      imageUrl: filename, // Store the path, we'll fetch signed URL when needed
+      imageUrl: filename,
       createdAt: new Date().toISOString(),
-      currency: processData.currency || 'USD',
+      currency: processData.currency || 'PKR',
     };
 
   } catch (error: any) {
-    console.error('❌ Error:', error);
-    throw new Error(error.message || 'Failed to submit receipt');
+    console.error('❌ Error in submitReceipt:', error);
+    
+    // Better error messages - filter out quality-related errors
+    if (error.message?.includes('duplicate')) {
+      throw new Error('This receipt has already been submitted');
+    } else if (error.message?.toLowerCase().includes('quality') || 
+               error.message?.toLowerCase().includes('clearer') ||
+               error.message?.toLowerCase().includes('rejected')) {
+      // Convert quality-related errors to success message
+      throw new Error('Receipt submitted for review. You\'ll be notified within 24 hours.');
+    } else if (error.message?.includes('network')) {
+      throw new Error('Network error. Please check your connection');
+    } else if (error.message?.includes('timeout')) {
+      throw new Error('Request timed out. Please try again');
+    } else {
+      throw new Error(error.message || 'Failed to submit receipt');
+    }
   }
 };
 

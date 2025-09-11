@@ -70,6 +70,7 @@ interface AuthContextType {
 
   // Profile management
   updateProfile: (updates: Partial<UserData>) => Promise<void>;
+  // refreshProfile: () => Promise<void>;
 
   // Deprecated methods (keeping for compatibility)
   signInWithEmailOtp: (email: string) => Promise<void>;
@@ -779,6 +780,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     sendPasswordResetOtp,
     resetPassword,
     updateProfile,
+    // refreshProfile,
 
     // Deprecated methods (for compatibility)
     signInWithEmailOtp,
